@@ -125,13 +125,14 @@ namespace ov_msckf {
          */
         bool try_update(State *state, double timestamp);
 
-
+        /// Options used during update (chi2 multiplier)
+        UpdaterOptions _options;
 
     protected:
 
 
-        /// Options used during update (chi2 multiplier)
-        UpdaterOptions _options;
+        // /// Options used during update (chi2 multiplier)
+        // UpdaterOptions _options;
 
         /// Container for the imu noise values
         Propagator::NoiseManager _noises;
