@@ -592,27 +592,47 @@ void RosVisualizer::publish_groundtruth() {
     Eigen::Matrix<double,16,1> state_ekf = _app->get_state()->_imu->value();
 
     static Eigen::Matrix4d transItoG = Eigen::Matrix4d::Identity();
+    // static Eigen::Matrix<double, 4, 4> poseI = Eigen::Matrix4d::Zero();
+    static Eigen::Matrix3d R_ItoT0 = Eigen::Matrix3d::Zero();
+    static Eigen::Matrix3d R_GtoT0 = Eigen::Matrix3d::Zero();
+    static Eigen::Vector3d p_T0inG;// = Eigen::Matrix3d::Zero();
+    static Eigen::Vector3d p_T0inI;// = Eigen::Matrix3d::Zero();
 
     if (isFirst)
     {
-        Eigen::Matrix<double, 4, 4> poseI, poseGT;
-        poseI.block<3, 3>(0, 0) = quat_2_Rot(state_ekf.block<4, 1>(0, 0));
-        poseI.block<3, 1>(0, 3) = state_ekf.block<3, 1>(4, 0);
-        poseGT.block<3, 3>(0, 0) = quat_2_Rot(state_gt.block<4, 1>(1, 0));
-        poseGT.block<3, 1>(0, 3) = state_gt.block<3, 1>(5, 0);
-        transItoG = poseGT*Inv_se3(poseI);
+        // Eigen::Matrix<double, 4, 4> poseI = Eigen::Matrix4d::Zero();
+        // Eigen::Matrix<double, 4, 4> poseGT = Eigen::Matrix4d::Zero();
+        // poseI(3, 3) = 1;
+        // poseGT(3, 3) = 1;
+        // poseI.block<3, 3>(0, 0) = quat_2_Rot(state_ekf.block<4, 1>(0, 0));
+        // poseI.block<3, 1>(0, 3) = state_ekf.block<3, 1>(4, 0);
+        // poseGT.block<3, 3>(0, 0) = quat_2_Rot(state_gt.block<4, 1>(1, 0));
+        // poseGT.block<3, 1>(0, 3) = state_gt.block<3, 1>(5, 0);
+        // transItoG =poseI * Inv_se3(poseGT) ;
 
         isFirst = false;
+
+        R_ItoT0 = quat_2_Rot(state_ekf.block<4, 1>(0, 0));
+        R_GtoT0 = quat_2_Rot(state_gt.block<4, 1>(1, 0));
+        p_T0inI = state_ekf.block<3, 1>(4, 0);
+        p_T0inG = state_gt.block<3, 1>(5, 0);
     }
     {
-        Eigen::Matrix4d poseGT, poseIinG;
-        poseGT.block<3, 3>(0, 0) = quat_2_Rot(state_gt.block<4, 1>(1, 0));
-        poseGT.block<3, 1>(0, 3) = state_gt.block<3, 1>(5, 0);
-        poseIinG = (transItoG)*poseGT;
-        state_gt.block<4, 1>(1, 0) = rot_2_quat(poseIinG.block<3, 3>(0, 0));        
-        state_gt.block<3, 1>(5, 0) = poseIinG.block<3, 1>(0, 3);
-    }
+        // Eigen::Matrix<double, 4, 4> poseIinG = Eigen::Matrix4d::Zero();
+        // Eigen::Matrix<double, 4, 4> poseGT = Eigen::Matrix4d::Zero();
+        // poseIinG(3, 3) = 1;
+        // poseGT(3, 3) = 1;
+        // poseGT.block<3, 3>(0, 0) = quat_2_Rot(state_gt.block<4, 1>(1, 0));
+        // poseGT.block<3, 1>(0, 3) = state_gt.block<3, 1>(5, 0);
+        // cout <<poseGT<<endl;
+        // poseIinG = Inv_se3(transItoG) * Inv_se3(poseGT);
+        // state_gt.block<4, 1>(1, 0) = rot_2_quat(poseIinG.block<3, 3>(0, 0));        
+        // state_gt.block<3, 1>(5, 0) = poseIinG.block<3, 1>(0, 3);
 
+        state_gt.block<3, 1>(5, 0) = R_ItoT0.transpose() * R_GtoT0 * (state_gt.block<3, 1>(5, 0)  - p_T0inG) + p_T0inI;
+    }
+    // cout << state_ekf.block<4, 1>(0, 0).transpose() << endl
+    //      << state_gt.block<4, 1>(1, 0).transpose() << endl;
     // Create pose of IMU
     geometry_msgs::PoseStamped poseIinM;
     poseIinM.header.stamp = ros::Time(timestamp_inI);
