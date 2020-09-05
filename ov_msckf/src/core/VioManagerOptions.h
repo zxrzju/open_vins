@@ -152,6 +152,9 @@ namespace ov_msckf {
         /// Map between camid and the dimensions of incoming images (width/cols, height/rows). This is normally only used during simulation.
         std::map<size_t,std::pair<int,int>> camera_wh;
 
+        /// Map between camid and lidar extrinsics (q_ItoL, p_IinL).
+        std::map<size_t, Eigen::VectorXd> lidar_extrinsics;
+
         /**
          * @brief This function will print out all simulated parameters loaded.
          * This allows for visual checking that everything was loaded properly from ROS/CMD parsers.
@@ -173,7 +176,16 @@ namespace ov_msckf {
                 T_CtoI.block(0,3,3,1) = -T_CtoI.block(0,0,3,3)*camera_extrinsics.at(n).block(4,0,3,1);
                 std::cout << "T_C" << n << "toI:" << endl << T_CtoI << std::endl << std::endl;
             }
-        }
+
+            for(int n=0; n<state_options.num_lidars; n++) {
+                std::cout << "lidar_" << n << "_extrinsic(0:3):" << endl << lidar_extrinsics.at(n).block(0,0,4,1).transpose() << std::endl;
+                std::cout << "lidar_" << n << "_extrinsic(4:6):" << endl << lidar_extrinsics.at(n).block(4,0,3,1).transpose() << std::endl;
+                Eigen::Matrix4d T_LtoI = Eigen::Matrix4d::Identity();
+                T_LtoI.block(0,0,3,3) = quat_2_Rot(lidar_extrinsics.at(n).block(0,0,4,1)).transpose();
+                T_LtoI.block(0, 3, 3, 1) = -T_LtoI.block(0, 0, 3, 3) * lidar_extrinsics.at(n).block(4, 0, 3, 1);
+                std::cout << "T_L" << n << "toI:" << endl << T_LtoI << std::endl << std::endl;
+            }        
+            }
 
         // TRACKERS ===============================
 

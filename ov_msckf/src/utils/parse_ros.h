@@ -244,15 +244,39 @@ namespace ov_msckf {
 
         }
 
+        // Lidar params
+        nh.param<int>("max_loam", params.state_options.max_loam_features, params.state_options.max_loam_features);
+        nh.param<int>("max_loam_in_update", params.state_options.max_loam_in_update, params.state_options.max_loam_in_update);
+        nh.param<int>("max_lidars", params.state_options.num_lidars, params.state_options.num_lidars);
+        nh.param<int>("scans", params.state_options.scans, params.state_options.scans);
+        nh.param<bool>("calib_lidar_extrinsics", params.state_options.do_calib_lidar_pose, params.state_options.do_calib_lidar_pose);
+        nh.param<bool>("calib_lidar_timeoffset", params.state_options.do_calib_lidar_timeoffset, params.state_options.do_calib_lidar_timeoffset);
 
+        for (int i = 0; i < params.state_options.num_lidars; i++)
+        {
+            // Our camera extrinsics transform
+            Eigen::Matrix4d T_LtoI;
+            std::vector<double> matrix_TLtoI;
+            std::vector<double> matrix_TtoI_default = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
 
+            // Read in from ROS, and save into our eigen mat
+            nh.param<std::vector<double>>("T_L" + std::to_string(i) + "toI", matrix_TLtoI, matrix_TtoI_default);
+            T_LtoI << matrix_TLtoI.at(0), matrix_TLtoI.at(1), matrix_TLtoI.at(2), matrix_TLtoI.at(3),
+                matrix_TLtoI.at(4), matrix_TLtoI.at(5), matrix_TLtoI.at(6), matrix_TLtoI.at(7),
+                matrix_TLtoI.at(8), matrix_TLtoI.at(9), matrix_TLtoI.at(10), matrix_TLtoI.at(11),
+                matrix_TLtoI.at(12), matrix_TLtoI.at(13), matrix_TLtoI.at(14), matrix_TLtoI.at(15);
+
+            // Load these into our state
+            Eigen::Matrix<double, 7, 1> lidar_eigen;
+            lidar_eigen.block(0, 0, 4, 1) = rot_2_quat(T_LtoI.block(0, 0, 3, 3).transpose());
+            lidar_eigen.block(4, 0, 3, 1) = -T_LtoI.block(0, 0, 3, 3).transpose() * T_LtoI.block(0, 3, 3, 1);
+
+            // Insert
+            params.lidar_extrinsics.insert({i, lidar_eigen});
+        }
         // Success, lets returned the parsed options
         return params;
-
-    }
-
-
-
+        }
 }
 
 

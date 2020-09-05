@@ -86,13 +86,13 @@ target_include_directories(ov_core_lib PUBLIC src)
 ##################################################
 # Make binary files!
 ##################################################
-if (catkin_FOUND)
-    add_executable(test_tracking src/test_tracking.cpp)
-    target_link_libraries(test_tracking ov_core_lib ${thirdparty_libraries})
-endif()
+# if (catkin_FOUND)
+#     add_executable(test_tracking src/test_tracking.cpp)
+#     target_link_libraries(test_tracking ov_core_lib ${thirdparty_libraries})
+# endif()
 
 
-add_executable(test_webcam src/test_webcam.cpp)
-target_link_libraries(test_webcam ov_core_lib ${thirdparty_libraries})
+# add_executable(test_webcam src/test_webcam.cpp)
+# target_link_libraries(test_webcam ov_core_lib ${thirdparty_libraries})
 
 

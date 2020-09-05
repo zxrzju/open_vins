@@ -69,6 +69,26 @@ namespace ov_msckf {
         /// Number of cameras
         int num_cameras = 1;
 
+
+        /// Number of Lidars
+        int num_lidars = 1;
+
+        /// Number of SCANS
+        int scans = 16;
+        
+        /// Max number of estimated loam features
+        int max_loam_features = 25;
+
+        /// Max number of loam features we allow to be included in a single EKF update.
+        int max_loam_in_update = INT_MAX;
+
+        /// Bool to determine whether or not to calibrate imu-to-lidar pose
+        bool do_calib_lidar_pose = false;
+
+        /// Bool to determine whether or not to calibrate lidar to IMU time offset
+        bool do_calib_lidar_timeoffset = false;
+
+
         /// What representation our features are in (msckf features)
         LandmarkRepresentation::Representation feat_rep_msckf = LandmarkRepresentation::Representation::GLOBAL_3D;
 
@@ -95,8 +115,13 @@ namespace ov_msckf {
             printf("\t- feat_rep_msckf: %s\n", LandmarkRepresentation::as_string(feat_rep_msckf).c_str());
             printf("\t- feat_rep_slam: %s\n", LandmarkRepresentation::as_string(feat_rep_slam).c_str());
             printf("\t- feat_rep_aruco: %s\n", LandmarkRepresentation::as_string(feat_rep_aruco).c_str());
-        }
 
+            printf("\t- max_lidars: %d\n", num_lidars);
+            printf("\t- max_loam: %d\n", max_loam_features);
+            printf("\t- max_loam_in_update: %d\n", max_loam_in_update);
+            printf("\t- calib_lidar_extrinsics: %d\n", do_calib_lidar_pose);
+            printf("\t- calib_lidar_timeoffset: %d\n", do_calib_lidar_timeoffset);
+        }
     };
 
 

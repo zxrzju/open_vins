@@ -566,7 +566,7 @@ void RosVisualizer::publish_features() {
 
 
 void RosVisualizer::publish_groundtruth() {
-
+    static bool isFirst = true;
     // Our groundtruth state
     Eigen::Matrix<double,17,1> state_gt;
 
@@ -590,6 +590,28 @@ void RosVisualizer::publish_groundtruth() {
 
     // Get the GT and system state state
     Eigen::Matrix<double,16,1> state_ekf = _app->get_state()->_imu->value();
+
+    static Eigen::Matrix4d transItoG = Eigen::Matrix4d::Identity();
+
+    if (isFirst)
+    {
+        Eigen::Matrix<double, 4, 4> poseI, poseGT;
+        poseI.block<3, 3>(0, 0) = quat_2_Rot(state_ekf.block<4, 1>(0, 0));
+        poseI.block<3, 1>(0, 3) = state_ekf.block<3, 1>(4, 0);
+        poseGT.block<3, 3>(0, 0) = quat_2_Rot(state_gt.block<4, 1>(1, 0));
+        poseGT.block<3, 1>(0, 3) = state_gt.block<3, 1>(5, 0);
+        transItoG = poseGT*Inv_se3(poseI);
+
+        isFirst = false;
+    }
+    {
+        Eigen::Matrix4d poseGT, poseIinG;
+        poseGT.block<3, 3>(0, 0) = quat_2_Rot(state_gt.block<4, 1>(1, 0));
+        poseGT.block<3, 1>(0, 3) = state_gt.block<3, 1>(5, 0);
+        poseIinG = (transItoG)*poseGT;
+        state_gt.block<4, 1>(1, 0) = rot_2_quat(poseIinG.block<3, 3>(0, 0));        
+        state_gt.block<3, 1>(5, 0) = poseIinG.block<3, 1>(0, 3);
+    }
 
     // Create pose of IMU
     geometry_msgs::PoseStamped poseIinM;

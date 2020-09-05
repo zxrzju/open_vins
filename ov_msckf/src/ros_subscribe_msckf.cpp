@@ -37,6 +37,7 @@
 #include "utils/dataset_reader.h"
 #include "utils/parse_ros.h"
 
+#include "aloam/scanRegistration.h"
 
 using namespace ov_msckf;
 
@@ -44,30 +45,109 @@ using namespace ov_msckf;
 VioManager* sys;
 RosVisualizer* viz;
 
-
 // Buffer data
 double time_buffer = -1;
 cv::Mat img0_buffer, img1_buffer;
+
+// Time offset base IMU to lidar (t_imu = t_lidar + t_off)
+std::unordered_map<size_t, double> _calib_dt_LIDARtoIMU;
+
+std::unordered_map<size_t, std::string> _topic_lidar;
+
+std::unordered_map<size_t, ros::Subscriber> _sublidar;
+
+std::unordered_map<size_t, double> _lidar_time_buffer;
+
+std::unordered_map<size_t, pcl::PointCloud<pcl::PointXYZ>::Ptr> _lidar_pc_buffer;
+
+std::unordered_map<size_t, pcl::KdTreeFLANN<pcl::PointXYZI>::Ptr> _lidar_kdtree_corner, _lidar_kdtree_surface;
+
+std::unordered_map<size_t, pcl::PointCloud<PointType>::Ptr> _laserCloudCornerLast, _laserCloudSurfLast;
+
+std::unordered_map<size_t, Eigen::Quaterniond> _q_laser_last;
+
+std::unordered_map<size_t, Eigen::Vector3d> _t_laser_last;
+
+// pcl::KdTreeFLANN<pcl::PointXYZI>::Ptr kdtreeCornerLast(new pcl::KdTreeFLANN<pcl::PointXYZI>());
+// pcl::KdTreeFLANN<pcl::PointXYZI>::Ptr kdtreeSurfLast(new pcl::KdTreeFLANN<pcl::PointXYZI>());
 
 // Callback functions
 void callback_inertial(const sensor_msgs::Imu::ConstPtr& msg);
 void callback_monocular(const sensor_msgs::ImageConstPtr& msg0);
 void callback_stereo(const sensor_msgs::ImageConstPtr& msg0, const sensor_msgs::ImageConstPtr& msg1);
+void callback_laser(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg, std::string &topic, int scans);
 
-
+ros::Publisher pubLaserCloudCornerLast;
+ros::Publisher pubLaserCloudSurfLast;
+ros::Publisher pubLaserCloudFullRes;
+ros::Publisher pubLaserOdometry;
+ros::Publisher pubLaserPath;
+VioManagerOptions params;
 
 // Main function
-int main(int argc, char** argv) {
+int main(int argc, char **argv)
+{
 
     // Launch our ros node
     ros::init(argc, argv, "run_subscribe_msckf");
     ros::NodeHandle nh("~");
 
     // Create our VIO system
-    VioManagerOptions params = parse_ros_nodehandler(nh);
+    // VioManagerOptions params = parse_ros_nodehandler(nh);
+    params = parse_ros_nodehandler(nh);
     sys = new VioManager(params);
     viz = new RosVisualizer(nh, sys);
 
+    // pubLaserCloud = nh.advertise<sensor_msgs::PointCloud2>("/velodyne_cloud_2", 100);
+    // pubCornerPointsSharp = nh.advertise<sensor_msgs::PointCloud2>("/laser_cloud_sharp", 100);
+    // pubCornerPointsLessSharp = nh.advertise<sensor_msgs::PointCloud2>("/laser_cloud_less_sharp", 100);
+    // pubSurfPointsFlat = nh.advertise<sensor_msgs::PointCloud2>("/laser_cloud_flat", 100);
+    // pubSurfPointsLessFlat = nh.advertise<sensor_msgs::PointCloud2>("/laser_cloud_less_flat", 100);
+    // ros::Subscriber subCornerPointsSharp = nh.subscribe<sensor_msgs::PointCloud2>("/laser_cloud_sharp", 100, laserCloudSharpHandler);
+    // ros::Subscriber subCornerPointsLessSharp = nh.subscribe<sensor_msgs::PointCloud2>("/laser_cloud_less_sharp", 100, laserCloudLessSharpHandler);
+    // ros::Subscriber subSurfPointsFlat = nh.subscribe<sensor_msgs::PointCloud2>("/laser_cloud_flat", 100, laserCloudFlatHandler);
+    // ros::Subscriber subSurfPointsLessFlat = nh.subscribe<sensor_msgs::PointCloud2>("/laser_cloud_less_flat", 100, laserCloudLessFlatHandler);
+    // ros::Subscriber subLaserCloudFullRes = nh.subscribe<sensor_msgs::PointCloud2>("/velodyne_cloud_2", 100, laserCloudFullResHandler);
+    // pubLaserCloudCornerLast = nh.advertise<sensor_msgs::PointCloud2>("/laser_cloud_corner_last", 100);
+    // pubLaserCloudSurfLast = nh.advertise<sensor_msgs::PointCloud2>("/laser_cloud_surf_last", 100);
+    // pubLaserCloudFullRes = nh.advertise<sensor_msgs::PointCloud2>("/velodyne_cloud_3", 100);
+    // pubLaserOdometry = nh.advertise<nav_msgs::Odometry>("/laser_odom_to_init", 100);
+    // pubLaserPath = nh.advertise<nav_msgs::Path>("/laser_odom_path", 100);
+    pcl::PointCloud<PointType>::Ptr laserCloudInPtr(new pcl::PointCloud<PointType>());
+
+
+
+    // // aloamInit(nh);
+    // for (int i = 0; i < params.state_options.num_lidars; i++)
+    // {
+    //     std::string topic_lidar; 
+    //     nh.param<std::string>("topic_lidar" + std::to_string(i), topic_lidar, "");
+    //     ros::Subscriber sublidar = nh.subscribe<sensor_msgs::PointCloud2>(topic_lidar, 9999, boost::bind(&callback_laser, _1, topic_lidar, params.state_options.scans));
+
+    //     _sublidar.insert({i, sublidar});
+    //     _topic_lidar.insert({i, topic_lidar});
+    //     _lidar_time_buffer.insert({i, -1});
+
+    //     pcl::PointCloud<pcl::PointXYZ>::Ptr pc(new pcl::PointCloud<pcl::PointXYZ>());
+    //     _lidar_pc_buffer.insert({i, pc});
+
+    //     pcl::KdTreeFLANN<pcl::PointXYZI>::Ptr kdtreeCornerLast(new pcl::KdTreeFLANN<pcl::PointXYZI>());
+    //     _lidar_kdtree_corner.insert({i, kdtreeCornerLast});
+
+    //     pcl::KdTreeFLANN<pcl::PointXYZI>::Ptr kdtreeSurfLast(new pcl::KdTreeFLANN<pcl::PointXYZI>());
+    //     _lidar_kdtree_surface.insert({i, kdtreeSurfLast});
+
+    //     pcl::PointCloud<PointType>::Ptr laserCloudCornerLast(new pcl::PointCloud<PointType>());
+    //     _laserCloudCornerLast.insert({i, laserCloudCornerLast});
+
+    //     pcl::PointCloud<PointType>::Ptr laserCloudSurfLast(new pcl::PointCloud<PointType>());
+    //     _laserCloudSurfLast.insert({i, laserCloudSurfLast});
+
+    //     Eigen::Quaterniond q_w_curr(1, 0, 0, 0);
+    //     Eigen::Vector3d t_w_curr(0, 0, 0);
+    //     _q_laser_last.insert({i, q_w_curr});
+    //     _t_laser_last.insert({i, t_w_curr});
+    // }
 
     //===================================================================================
     //===================================================================================
@@ -90,18 +170,18 @@ int main(int argc, char** argv) {
 
     // Create subscribers
     ros::Subscriber subimu = nh.subscribe(topic_imu.c_str(), 9999, callback_inertial);
-    ros::Subscriber subcam;
-    if(params.state_options.num_cameras == 1) {
-        ROS_INFO("subscribing to: %s", topic_camera0.c_str());
-        subcam = nh.subscribe(topic_camera0.c_str(), 1, callback_monocular);
-    } else if(params.state_options.num_cameras == 2) {
-        ROS_INFO("subscribing to: %s", topic_camera0.c_str());
-        ROS_INFO("subscribing to: %s", topic_camera1.c_str());
-        sync.registerCallback(boost::bind(&callback_stereo, _1, _2));
-    } else {
-        ROS_ERROR("INVALID MAX CAMERAS SELECTED!!!");
-        std::exit(EXIT_FAILURE);
-    }
+    // ros::Subscriber subcam;
+    // if(params.state_options.num_cameras == 1) {
+    //     ROS_INFO("subscribing to: %s", topic_camera0.c_str());
+    //     subcam = nh.subscribe(topic_camera0.c_str(), 1, callback_monocular);
+    // } else if(params.state_options.num_cameras == 2) {
+    //     ROS_INFO("subscribing to: %s", topic_camera0.c_str());
+    //     ROS_INFO("subscribing to: %s", topic_camera1.c_str());
+    //     sync.registerCallback(boost::bind(&callback_stereo, _1, _2));
+    // } else {
+    //     ROS_ERROR("INVALID MAX CAMERAS SELECTED!!!");
+    //     std::exit(EXIT_FAILURE);
+    // }
 
     //===================================================================================
     //===================================================================================
@@ -121,10 +201,7 @@ int main(int argc, char** argv) {
 
     // Done!
     return EXIT_SUCCESS;
-
-
 }
-
 
 void callback_inertial(const sensor_msgs::Imu::ConstPtr& msg) {
 
@@ -136,6 +213,18 @@ void callback_inertial(const sensor_msgs::Imu::ConstPtr& msg) {
 
     // send it to our VIO system
     sys->feed_measurement_imu(timem, wm, am);
+
+    // static long cnt = 0;
+    // cnt++;
+    // if (cnt % 10 == 0)
+    // {
+    //     cout << "propagate\n";
+    //     ov_msckf::State *state = sys->get_state();
+    //     ov_msckf::Propagator *propagator = sys->get_propagator();
+    //     propagator->propagate_and_clone(state, timem);
+    //     cout << sys->get_state()->_timestamp << endl;
+    // }
+
     viz->visualize_odometry(timem);
 
 }
@@ -143,7 +232,6 @@ void callback_inertial(const sensor_msgs::Imu::ConstPtr& msg) {
 
 
 void callback_monocular(const sensor_msgs::ImageConstPtr& msg0) {
-
 
     // Get the image
     cv_bridge::CvImageConstPtr cv_ptr;
@@ -172,6 +260,163 @@ void callback_monocular(const sensor_msgs::ImageConstPtr& msg0) {
 }
 
 
+void callback_laser(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg, std::string &topic, int scans){
+
+    double timem = laserCloudMsg->header.stamp.toSec();
+    pcl::KdTreeFLANN<pcl::PointXYZI>::Ptr kdtreeCornerLast, kdtreeSurfLast;
+    pcl::PointCloud<pcl::PointXYZ>::Ptr laserCloudInPtr;
+    pcl::PointCloud<pcl::PointXYZ>::Ptr lastLaserCloudPtr;
+
+    pcl::PointCloud<pcl::PointXYZ> laserCloudIn;
+    pcl::fromROSMsg(*laserCloudMsg, laserCloudIn);
+    
+    laserCloudInPtr = laserCloudIn.makeShared();
+
+    pcl::PointCloud<PointType>::Ptr laserCloud(new pcl::PointCloud<PointType>());
+    pcl::PointCloud<PointType> cornerPointsSharp, cornerPointsLessSharp, surfPointsFlat, surfPointsLessFlat;
+    pcl::PointCloud<PointType>::Ptr cornerPointsSharpPtr, cornerPointsLessSharpPtr, surfPointsFlatPtr, surfPointsLessFlatPtr;
+
+    int num_lidars = _topic_lidar.size();
+    int current_lidar = 0;
+    for(int i = 0; i < num_lidars; i++)
+        if(_topic_lidar.at(i) == topic){
+            current_lidar = i;
+            break;
+        }
+    std::cout << current_lidar << std::endl;
+    if(_lidar_time_buffer.at(current_lidar) == -1){
+        _lidar_time_buffer.at(current_lidar) = 0;
+        _lidar_pc_buffer.at(current_lidar) = laserCloudInPtr;
+        return ;
+        }
+    else if(_lidar_time_buffer.at(current_lidar) == 0){
+        _lidar_time_buffer.at(current_lidar) = timem;
+        lastLaserCloudPtr = _lidar_pc_buffer.at(current_lidar);
+        scan_registration(*lastLaserCloudPtr, laserCloud, cornerPointsSharp, cornerPointsLessSharp, surfPointsFlat, surfPointsLessFlat, scans);
+        cornerPointsSharpPtr = cornerPointsSharp.makeShared();
+        cornerPointsLessSharpPtr = cornerPointsLessSharp.makeShared();
+        surfPointsFlatPtr = surfPointsFlat.makeShared();
+        surfPointsLessFlatPtr = surfPointsLessFlat.makeShared();
+
+        _lidar_kdtree_corner.at(current_lidar)->setInputCloud(cornerPointsLessSharpPtr);
+        _lidar_kdtree_surface.at(current_lidar)->setInputCloud(surfPointsLessFlatPtr);
+        _lidar_pc_buffer.at(current_lidar) = laserCloudInPtr;
+        _laserCloudCornerLast.at(current_lidar) = cornerPointsLessSharpPtr;
+        _laserCloudSurfLast.at(current_lidar) = surfPointsLessFlatPtr;
+
+        return;
+    }
+    kdtreeCornerLast = _lidar_kdtree_corner.at(current_lidar);
+    kdtreeSurfLast = _lidar_kdtree_surface.at(current_lidar);
+    lastLaserCloudPtr = _lidar_pc_buffer.at(current_lidar);
+
+    scan_registration(*lastLaserCloudPtr, laserCloud, cornerPointsSharp, cornerPointsLessSharp, surfPointsFlat, surfPointsLessFlat, scans);
+    cornerPointsSharpPtr = cornerPointsSharp.makeShared();
+    cornerPointsLessSharpPtr = cornerPointsLessSharp.makeShared();
+    surfPointsFlatPtr = surfPointsFlat.makeShared();
+    surfPointsLessFlatPtr = surfPointsLessFlat.makeShared();
+
+    pcl::PointCloud<PointType>::Ptr laserCloudCornerLast = _laserCloudCornerLast.at(current_lidar);
+    pcl::PointCloud<PointType>::Ptr laserCloudSurfLast = _laserCloudSurfLast.at(current_lidar);
+
+    std::vector<EdgeFeature> edge_list;
+
+    Eigen::Quaterniond q_last_curr(1, 0, 0, 0);
+    Eigen::Vector3d t_last_curr(0, 0, 0);    
+
+
+
+    // lidar_feature_extraction();
+    // do_lidar_propagate_update(timestamp, edge_list);
+    double timestamp =  _lidar_time_buffer.at(current_lidar);
+    ov_msckf::State *state = sys->get_state();
+
+    if (state->_timestamp >= timestamp)
+    {
+        printf("%3f, %3f\n", timestamp, state->_timestamp);
+        printf(YELLOW "lidar received out of order (prop dt = %3f)\n" RESET, (timestamp - state->_timestamp));
+        return;
+    }
+    ov_msckf::Propagator *propagator = sys->get_propagator();
+
+    Eigen::Quaterniond q_last = _q_laser_last.at(current_lidar);
+    Eigen::Vector3d t_last = _t_laser_last.at(current_lidar);
+
+    std::cout<<"before:\n"<<state->_imu->pos().transpose()<<std::endl;
+    Eigen::Matrix4d poseLast, poseCurr, poseDelta;
+    poseLast.block<3, 3>(0, 0) = q_last.toRotationMatrix();
+    poseLast.block<3, 1>(0, 3) = t_last;
+
+    propagator->propagate_and_clone(state, timestamp);
+
+    poseCurr.block<3, 3>(0, 0) = state->_imu->Rot();
+    poseCurr.block<3, 1>(0, 3) = state->_imu->pos();
+    std::cout << "after:\n"
+              << (state->_imu->pos().transpose()) << std::endl;
+
+    poseDelta = poseCurr*Inv_se3(poseLast);
+
+    // Get calibration for our anchor camera
+    Eigen::Matrix<double, 3, 3> R_ItoL = state->_calib_IMUtoLIDAR.at(current_lidar)->Rot();
+    Eigen::Matrix<double, 3, 1> p_IinL = state->_calib_IMUtoLIDAR.at(current_lidar)->pos();
+
+    Eigen::Matrix<double, 3, 3> R_last = q_last.toRotationMatrix().transpose();
+
+    Eigen::Matrix<double, 3, 3> R_curr = state->_imu->Rot().transpose();
+
+    Eigen::Matrix<double, 3, 3> R_last_curr = R_ItoL * R_last * (R_ItoL * R_curr).transpose();
+
+    Eigen::Matrix<double, 3, 1> p_last = t_last;
+    Eigen::Matrix<double, 3, 1> p_curr = state->_imu->pos();
+    Eigen::Matrix<double, 3, 1> p_LinI = -R_ItoL.transpose()*p_IinL;
+    Eigen::Matrix<double, 3, 1> p_CurrinLast = R_ItoL * R_last * (p_curr - p_last + R_curr * p_LinI) + p_IinL;
+
+    Eigen::Quaterniond deltaQ(R_last_curr);
+    Eigen::Vector3d deltaT = p_CurrinLast;
+    std::cout<<"delta: "<<deltaT.transpose()<<" "<<std::endl;
+    std::cout<<timestamp<<"\n";
+
+    get_correspondences(kdtreeCornerLast, kdtreeSurfLast, laserCloudCornerLast, laserCloudSurfLast, cornerPointsSharpPtr, cornerPointsLessSharpPtr, surfPointsFlatPtr, surfPointsLessFlatPtr, deltaQ, deltaT, edge_list);
+
+    _q_laser_last.at(current_lidar) = Eigen::Quaterniond(poseCurr.block<3, 3>(0, 0));
+    _t_laser_last.at(current_lidar) = state->_imu->pos();
+
+    printf("sharp corner: %d, edge feature: %d\n", cornerPointsSharp.size(), edge_list.size());
+    _lidar_time_buffer.at(current_lidar) = timem;
+    _laserCloudCornerLast.at(current_lidar) = cornerPointsLessSharpPtr;
+    _laserCloudSurfLast.at(current_lidar) = surfPointsLessFlatPtr;
+    _lidar_pc_buffer.at(current_lidar) = laserCloudInPtr;
+
+    //
+    // printf("feature points: %d  %d  %d  %d \n", cornerPointsSharp.size(), cornerPointsLessSharp.size(), surfPointsFlat.size(), surfPointsLessFlat.size());
+    // sensor_msgs::PointCloud2 laserCloudOutMsg;
+    // pcl::toROSMsg(*laserCloud, laserCloudOutMsg);
+    // laserCloudOutMsg.header.stamp = laserCloudMsg->header.stamp;
+    // laserCloudOutMsg.header.frame_id = "/camera_init";
+    // pubLaserCloud.publish(laserCloudOutMsg);
+    // sensor_msgs::PointCloud2 cornerPointsSharpMsg;
+    // pcl::toROSMsg(cornerPointsSharp, cornerPointsSharpMsg);
+    // cornerPointsSharpMsg.header.stamp = laserCloudMsg->header.stamp;
+    // cornerPointsSharpMsg.header.frame_id = "/camera_init";
+    // pubCornerPointsSharp.publish(cornerPointsSharpMsg);
+    // sensor_msgs::PointCloud2 cornerPointsLessSharpMsg;
+    // pcl::toROSMsg(cornerPointsLessSharp, cornerPointsLessSharpMsg);
+    // cornerPointsLessSharpMsg.header.stamp = laserCloudMsg->header.stamp;
+    // cornerPointsLessSharpMsg.header.frame_id = "/camera_init";
+    // pubCornerPointsLessSharp.publish(cornerPointsLessSharpMsg);
+    // sensor_msgs::PointCloud2 surfPointsFlat2;
+    // pcl::toROSMsg(surfPointsFlat, surfPointsFlat2);
+    // surfPointsFlat2.header.stamp = laserCloudMsg->header.stamp;
+    // surfPointsFlat2.header.frame_id = "/camera_init";
+    // pubSurfPointsFlat.publish(surfPointsFlat2);
+    // sensor_msgs::PointCloud2 surfPointsLessFlat2;
+    // pcl::toROSMsg(surfPointsLessFlat, surfPointsLessFlat2);
+    // surfPointsLessFlat2.header.stamp = laserCloudMsg->header.stamp;
+    // surfPointsLessFlat2.header.frame_id = "/camera_init";
+    // pubSurfPointsLessFlat.publish(surfPointsLessFlat2);
+    // ROS_INFO(topic.c_str());
+
+}
 
 void callback_stereo(const sensor_msgs::ImageConstPtr& msg0, const sensor_msgs::ImageConstPtr& msg1) {
 

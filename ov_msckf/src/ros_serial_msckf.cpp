@@ -34,6 +34,7 @@
 #include "utils/dataset_reader.h"
 #include "utils/parse_ros.h"
 
+#include "aloam/scanRegistration.h"
 
 using namespace ov_msckf;
 

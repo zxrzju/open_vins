@@ -111,6 +111,11 @@ namespace ov_msckf {
         /// What distortion model we are using (false=radtan, true=fisheye)
         std::unordered_map<size_t, bool> _cam_intrinsics_model;
 
+        /// Calibration poses for each lidar (R_ItoL, p_IinL)
+        std::unordered_map<size_t, PoseJPL *> _calib_IMUtoLIDAR;
+
+        /// Time offset base IMU to lidar (t_imu = t_lidar + t_off)
+        std::unordered_map<size_t, Vec*> _calib_dt_LIDARtoIMU;
 
     private:
 

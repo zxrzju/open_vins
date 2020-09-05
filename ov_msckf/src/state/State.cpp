@@ -75,6 +75,36 @@ State::State(StateOptions &options) {
         }
     }
 
+    // Loop through each lidar and create extrinsic and intrinsics
+    for (int i = 0; i < _options.num_lidars; i++)
+    {
+
+        // Allocate extrinsic transform
+        PoseJPL *pose = new PoseJPL();
+
+        // Allocate intrinsics for this lidar
+        Vec *dt_IMUtoLIDAR = new Vec(1);
+
+        // Add these to the corresponding maps
+        _calib_IMUtoLIDAR.insert({i, pose});
+        _calib_dt_LIDARtoIMU.insert({i, dt_IMUtoLIDAR});
+        // If calibrating lidar-imu pose, add to variables
+        if (_options.do_calib_lidar_pose)
+        {
+            pose->set_local_id(current_id);
+            _variables.push_back(pose);
+            current_id += pose->size();
+        }
+
+        // Lidar to IMU time offset
+        if (_options.do_calib_lidar_timeoffset)
+        {
+            dt_IMUtoLIDAR->set_local_id(current_id);
+            _variables.push_back(dt_IMUtoLIDAR);
+            current_id += dt_IMUtoLIDAR->size();
+        }
+    }
+
     // Finally initialize our covariance to small value
     _Cov = 1e-3*Eigen::MatrixXd::Identity(current_id, current_id);
 
@@ -92,6 +122,19 @@ State::State(StateOptions &options) {
         for(int i=0; i<_options.num_cameras; i++) {
             _Cov.block(_cam_intrinsics.at(i)->id(),_cam_intrinsics.at(i)->id(),4,4) = std::pow(1.0,2)*Eigen::MatrixXd::Identity(4,4);
             _Cov.block(_cam_intrinsics.at(i)->id()+4,_cam_intrinsics.at(i)->id()+4,4,4) = std::pow(0.005,2)*Eigen::MatrixXd::Identity(4,4);
+        }
+    }
+
+
+    if (_options.do_calib_lidar_timeoffset) {
+        for (int i = 0; i < _options.num_lidars; i++)
+            _Cov(_calib_dt_LIDARtoIMU.at(i)->id(), _calib_dt_LIDARtoIMU.at(i)->id()) = std::pow(0.01, 2);
+    }
+    if (_options.do_calib_lidar_pose) {
+        for (int i = 0; i < _options.num_lidars; i++)
+        {
+            _Cov.block(_calib_IMUtoLIDAR.at(i)->id(), _calib_IMUtoLIDAR.at(i)->id(), 3, 3) = std::pow(0.001, 2) * Eigen::MatrixXd::Identity(3, 3);
+            _Cov.block(_calib_IMUtoLIDAR.at(i)->id() + 3, _calib_IMUtoLIDAR.at(i)->id() + 3, 3, 3) = std::pow(0.01, 2) * Eigen::MatrixXd::Identity(3, 3);
         }
     }
 }

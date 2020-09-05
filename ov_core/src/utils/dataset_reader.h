@@ -134,8 +134,8 @@ namespace ov_core {
                 it0++;
             }
 
-            // If close to this timestamp, then use it
-            if(std::abs(closest_time-timestep) < 0.005) {
+            // If close to this timestamp, then use it  0.005 --> 0.010
+            if(std::abs(closest_time-timestep) < 0.010) {
                 //printf("init DT = %.4f\n", std::abs(closest_time-timestep));
                 //printf("timestamp = %.15f\n", closest_time);
                 timestep = closest_time;
