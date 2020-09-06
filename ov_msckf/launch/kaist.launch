@@ -144,7 +144,7 @@
 
 
     </node>
-    <node type="rviz" name="rviz1" pkg="rviz" args="-d $(find ov_msckf)/launch/display.rviz" />
+    <!-- <node type="rviz" name="rviz1" pkg="rviz" args="-d $(find ov_msckf)/launch/display.rviz" /> -->
 
     <!-- record the trajectory if enabled -->
     <!-- <group if="$(arg dosave)">

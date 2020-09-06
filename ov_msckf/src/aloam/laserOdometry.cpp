@@ -280,6 +280,9 @@ int get_correspondences(pcl::KdTreeFLANN<pcl::PointXYZI>::Ptr kdtreeCornerLast, 
                 edge.p_L1 = curr_point;
                 edge.p_L0_a = last_point_a;
                 edge.p_L0_b = last_point_b;
+
+                edge.res_estimation = 0;
+
                 edge_list.push_back(edge);
 
                 corner_correspondence++;

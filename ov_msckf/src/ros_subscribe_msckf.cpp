@@ -118,36 +118,36 @@ int main(int argc, char **argv)
 
 
     // // aloamInit(nh);
-    // for (int i = 0; i < params.state_options.num_lidars; i++)
-    // {
-    //     std::string topic_lidar; 
-    //     nh.param<std::string>("topic_lidar" + std::to_string(i), topic_lidar, "");
-    //     ros::Subscriber sublidar = nh.subscribe<sensor_msgs::PointCloud2>(topic_lidar, 9999, boost::bind(&callback_laser, _1, topic_lidar, params.state_options.scans));
+    for (int i = 0; i < params.state_options.num_lidars; i++)
+    {
+        std::string topic_lidar; 
+        nh.param<std::string>("topic_lidar" + std::to_string(i), topic_lidar, "");
+        ros::Subscriber sublidar = nh.subscribe<sensor_msgs::PointCloud2>(topic_lidar, 9999, boost::bind(&callback_laser, _1, topic_lidar, params.state_options.scans));
 
-    //     _sublidar.insert({i, sublidar});
-    //     _topic_lidar.insert({i, topic_lidar});
-    //     _lidar_time_buffer.insert({i, -1});
+        _sublidar.insert({i, sublidar});
+        _topic_lidar.insert({i, topic_lidar});
+        _lidar_time_buffer.insert({i, -1});
 
-    //     pcl::PointCloud<pcl::PointXYZ>::Ptr pc(new pcl::PointCloud<pcl::PointXYZ>());
-    //     _lidar_pc_buffer.insert({i, pc});
+        pcl::PointCloud<pcl::PointXYZ>::Ptr pc(new pcl::PointCloud<pcl::PointXYZ>());
+        _lidar_pc_buffer.insert({i, pc});
 
-    //     pcl::KdTreeFLANN<pcl::PointXYZI>::Ptr kdtreeCornerLast(new pcl::KdTreeFLANN<pcl::PointXYZI>());
-    //     _lidar_kdtree_corner.insert({i, kdtreeCornerLast});
+        pcl::KdTreeFLANN<pcl::PointXYZI>::Ptr kdtreeCornerLast(new pcl::KdTreeFLANN<pcl::PointXYZI>());
+        _lidar_kdtree_corner.insert({i, kdtreeCornerLast});
 
-    //     pcl::KdTreeFLANN<pcl::PointXYZI>::Ptr kdtreeSurfLast(new pcl::KdTreeFLANN<pcl::PointXYZI>());
-    //     _lidar_kdtree_surface.insert({i, kdtreeSurfLast});
+        pcl::KdTreeFLANN<pcl::PointXYZI>::Ptr kdtreeSurfLast(new pcl::KdTreeFLANN<pcl::PointXYZI>());
+        _lidar_kdtree_surface.insert({i, kdtreeSurfLast});
 
-    //     pcl::PointCloud<PointType>::Ptr laserCloudCornerLast(new pcl::PointCloud<PointType>());
-    //     _laserCloudCornerLast.insert({i, laserCloudCornerLast});
+        pcl::PointCloud<PointType>::Ptr laserCloudCornerLast(new pcl::PointCloud<PointType>());
+        _laserCloudCornerLast.insert({i, laserCloudCornerLast});
 
-    //     pcl::PointCloud<PointType>::Ptr laserCloudSurfLast(new pcl::PointCloud<PointType>());
-    //     _laserCloudSurfLast.insert({i, laserCloudSurfLast});
+        pcl::PointCloud<PointType>::Ptr laserCloudSurfLast(new pcl::PointCloud<PointType>());
+        _laserCloudSurfLast.insert({i, laserCloudSurfLast});
 
-    //     Eigen::Quaterniond q_w_curr(1, 0, 0, 0);
-    //     Eigen::Vector3d t_w_curr(0, 0, 0);
-    //     _q_laser_last.insert({i, q_w_curr});
-    //     _t_laser_last.insert({i, t_w_curr});
-    // }
+        Eigen::Quaterniond q_w_curr(1, 0, 0, 0);
+        Eigen::Vector3d t_w_curr(0, 0, 0);
+        _q_laser_last.insert({i, q_w_curr});
+        _t_laser_last.insert({i, t_w_curr});
+    }
 
     //===================================================================================
     //===================================================================================
@@ -380,139 +380,144 @@ void callback_laser(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg, std::
 
     get_correspondences(kdtreeCornerLast, kdtreeSurfLast, laserCloudCornerLast, laserCloudSurfLast, cornerPointsSharpPtr, cornerPointsLessSharpPtr, surfPointsFlatPtr, surfPointsLessFlatPtr, deltaQ, deltaT, edge_list);
 
+    // for (auto &edge : edge_list)
+    // {
+    //     Eigen::Vector3d num1, num2, dem1;
+
+    //     num1 = skew_x(edge.p_L1 - edge.p_L0_a) * (edge.p_L1 - edge.p_L0_b);
+    //     dem1 = edge.p_L0_a - edge.p_L0_b;
+    //     cout << "distance: "<<sqrt(double(num1.transpose() * num1)/double(dem1.transpose() * dem1)) << endl;
+    // }
 
 
     // // // UpdateMSCKF
-    // // // if((int)featsup_MSCKF.size() > state->_options.max_msckf_in_update)
-    // // //     featsup_MSCKF.erase(featsup_MSCKF.begin(), featsup_MSCKF.end()-state->_options.max_msckf_in_update);
-    // // // updaterMSCKF->update(state, featsup_MSCKF);
 
-    // if((int)edge_list.size() > sys->get_state()->_options.max_loam_in_update)
-    //     edge_list.erase(edge_list.begin(), edge_list.end() - state->_options.max_loam_in_update);
+    if((int)edge_list.size() > sys->get_state()->_options.max_loam_in_update)
+        edge_list.erase(edge_list.begin(), edge_list.end() - state->_options.max_loam_in_update);
 
-    // std::vector<EdgeFeature> feature_vec = edge_list;
-    // {
-    //     // Return if no features
-    //     if (feature_vec.empty())
-    //         return;
-    //     // Start timing
-    //     boost::posix_time::ptime rT0, rT1, rT2, rT3, rT4, rT5, rT6, rT7;
-    //     rT0 = boost::posix_time::microsec_clock::local_time();
+    std::vector<EdgeFeature> feature_vec = edge_list;
+    {
+        // Return if no features
+        if (feature_vec.empty())
+            return;
+        // Start timing
+        boost::posix_time::ptime rT0, rT1, rT2, rT3, rT4, rT5, rT6, rT7;
+        rT0 = boost::posix_time::microsec_clock::local_time();
 
-    //     // Calculate the max possible measurement size
-    //     size_t max_meas_size = 3*feature_vec.size();
+        // Calculate the max possible measurement size
+        size_t max_meas_size = 3*feature_vec.size();
 
-    //     // Calculate max possible state size (i.e. the size of our covariance)
-    //     // NOTE: that when we have the single inverse depth representations, those are only 1dof in size
-    //     size_t max_hx_size = state->max_covariance_size();
+        // Calculate max possible state size (i.e. the size of our covariance)
+        // NOTE: that when we have the single inverse depth representations, those are only 1dof in size
+        size_t max_hx_size = state->max_covariance_size();
 
-    //     // Large Jacobian and residual of *all* features for this update
-    //     Eigen::VectorXd res_big = Eigen::VectorXd::Zero(max_meas_size);
-    //     Eigen::MatrixXd Hx_big = Eigen::MatrixXd::Zero(max_meas_size, max_hx_size);
-    //     std::unordered_map<Type *, size_t> Hx_mapping;
-    //     std::vector<Type *> Hx_order_big;
-    //     size_t ct_jacob = 0;
-    //     size_t ct_meas = 0;
+        // Large Jacobian and residual of *all* features for this update
+        Eigen::VectorXd res_big = Eigen::VectorXd::Zero(max_meas_size);
+        Eigen::MatrixXd Hx_big = Eigen::MatrixXd::Zero(max_meas_size, max_hx_size);
+        std::unordered_map<Type *, size_t> Hx_mapping;
+        std::vector<Type *> Hx_order_big;
+        size_t ct_jacob = 0;
+        size_t ct_meas = 0;
 
-    //     // 4. Compute linear system for each feature, nullspace project, and reject
-    //     auto it2 = feature_vec.begin();
-    //     while (it2 != feature_vec.end())
-    //     {
+        // 4. Compute linear system for each feature, nullspace project, and reject
+        auto it2 = feature_vec.begin();
+        while (it2 != feature_vec.end())
+        {
 
-    //         // Our return values (feature jacobian, state jacobian, residual, and order of state jacobian)
-    //         Eigen::MatrixXd H_f;
-    //         Eigen::MatrixXd H_x;
-    //         Eigen::VectorXd res;
-    //         std::vector<Type *> Hx_order;
+            // Our return values (feature jacobian, state jacobian, residual, and order of state jacobian)
+            Eigen::MatrixXd H_f;
+            Eigen::MatrixXd H_x;
+            Eigen::VectorXd res;
+            std::vector<Type *> Hx_order;
 
-    //         // // get_feature_jacobin_full()
+            // // get_feature_jacobin_full()
 
-    //         // // nullspace_place()
+            // // nullspace_place()
 
-    //         /// Chi2 distance check
-    //         Eigen::MatrixXd P_marg = StateHelper::get_marginal_covariance(state, Hx_order);
-    //         Eigen::MatrixXd S = H_x * P_marg * H_x.transpose();
-    //         // S.diagonal() += _options.sigma_pix_sq * Eigen::VectorXd::Ones(S.rows());
+            /// Chi2 distance check
+            Eigen::MatrixXd P_marg = StateHelper::get_marginal_covariance(state, Hx_order);
+            Eigen::MatrixXd S = H_x * P_marg * H_x.transpose();
+            // S.diagonal() += _options.sigma_pix_sq * Eigen::VectorXd::Ones(S.rows());
 
-    //         S.diagonal() += 0 * Eigen::VectorXd::Ones(S.rows());
-    //         double chi2 = res.dot(S.llt().solve(res));
+            S.diagonal() += 0 * Eigen::VectorXd::Ones(S.rows());
+            double chi2 = res.dot(S.llt().solve(res));
 
-    //         // Get our threshold (we precompute up to 500 but handle the case that it is more)
-    //         double chi2_check;
-    //         if (res.rows() < 500)
-    //         {
-    //             // chi2_check = chi_squared_table[res.rows()];
-    //         }
-    //         else
-    //         {
-    //             boost::math::chi_squared chi_squared_dist(res.rows());
-    //             chi2_check = boost::math::quantile(chi_squared_dist, 0.95);
-    //             printf(YELLOW "chi2_check over the residual limit - %d\n" RESET, (int)res.rows());
-    //         }
+            // Get our threshold (we precompute up to 500 but handle the case that it is more)
+            double chi2_check;
+            if (res.rows() < 500)
+            {
+                // chi2_check = chi_squared_table[res.rows()];
+            }
+            else
+            {
+                boost::math::chi_squared chi_squared_dist(res.rows());
+                chi2_check = boost::math::quantile(chi_squared_dist, 0.95);
+                printf(YELLOW "chi2_check over the residual limit - %d\n" RESET, (int)res.rows());
+            }
 
-    //         // // Check if we should delete or not
-    //         // if (chi2 > _options.chi2_multipler * chi2_check)
-    //         // {
-    //         //     // (*it2)->to_delete = true;
-    //         //     it2 = feature_vec.erase(it2);
-    //         //     //cout << "featid = " << feat.featid << endl;
-    //         //     //cout << "chi2 = " << chi2 << " > " << _options.chi2_multipler*chi2_check << endl;
-    //         //     //cout << "res = " << endl << res.transpose() << endl;
-    //         //     continue;
-    //         // }
+            // // Check if we should delete or not
+            // if (chi2 > _options.chi2_multipler * chi2_check)
+            // {
+            //     // (*it2)->to_delete = true;
+            //     it2 = feature_vec.erase(it2);
+            //     //cout << "featid = " << feat.featid << endl;
+            //     //cout << "chi2 = " << chi2 << " > " << _options.chi2_multipler*chi2_check << endl;
+            //     //cout << "res = " << endl << res.transpose() << endl;
+            //     continue;
+            // }
 
-    //         // We are good!!! Append to our large H vector
-    //         size_t ct_hx = 0;
-    //         for (const auto &var : Hx_order)
-    //         {
+            // We are good!!! Append to our large H vector
+            size_t ct_hx = 0;
+            for (const auto &var : Hx_order)
+            {
 
-    //             // Ensure that this variable is in our Jacobian
-    //             if (Hx_mapping.find(var) == Hx_mapping.end())
-    //             {
-    //                 Hx_mapping.insert({var, ct_jacob});
-    //                 Hx_order_big.push_back(var);
-    //                 ct_jacob += var->size();
-    //             }
+                // Ensure that this variable is in our Jacobian
+                if (Hx_mapping.find(var) == Hx_mapping.end())
+                {
+                    Hx_mapping.insert({var, ct_jacob});
+                    Hx_order_big.push_back(var);
+                    ct_jacob += var->size();
+                }
 
-    //             // Append to our large Jacobian
-    //             Hx_big.block(ct_meas, Hx_mapping[var], H_x.rows(), var->size()) = H_x.block(0, ct_hx, H_x.rows(), var->size());
-    //             ct_hx += var->size();
-    //         }
-    //         // Append our residual and move forward
-    //         res_big.block(ct_meas, 0, res.rows(), 1) = res;
-    //         ct_meas += res.rows();
-    //         it2++;
+                // Append to our large Jacobian
+                Hx_big.block(ct_meas, Hx_mapping[var], H_x.rows(), var->size()) = H_x.block(0, ct_hx, H_x.rows(), var->size());
+                ct_hx += var->size();
+            }
+            // Append our residual and move forward
+            res_big.block(ct_meas, 0, res.rows(), 1) = res;
+            ct_meas += res.rows();
+            it2++;
 
-    //         // Return if we don't have anything and resize our matrices
-    //         if (ct_meas < 1)
-    //         {
-    //             return;
-    //         }
-    //         assert(ct_meas <= max_meas_size);
-    //         assert(ct_jacob <= max_hx_size);
-    //         res_big.conservativeResize(ct_meas, 1);
-    //         Hx_big.conservativeResize(ct_meas, ct_jacob);
+            // Return if we don't have anything and resize our matrices
+            if (ct_meas < 1)
+            {
+                return;
+            }
+            assert(ct_meas <= max_meas_size);
+            assert(ct_jacob <= max_hx_size);
+            res_big.conservativeResize(ct_meas, 1);
+            Hx_big.conservativeResize(ct_meas, ct_jacob);
 
-    //         // 5. Perform measurement compression
-    //         UpdaterHelper::measurement_compress_inplace(Hx_big, res_big);
-    //         if (Hx_big.rows() < 1)
-    //         {
-    //             return;
-    //         }
-    //         rT4 = boost::posix_time::microsec_clock::local_time();
+            // 5. Perform measurement compression
+            UpdaterHelper::measurement_compress_inplace(Hx_big, res_big);
+            if (Hx_big.rows() < 1)
+            {
+                return;
+            }
+            rT4 = boost::posix_time::microsec_clock::local_time();
 
-    //         // Our noise is isotropic, so make it here after our compression
-    //         // Eigen::MatrixXd R_big = _options.sigma_pix_sq * Eigen::MatrixXd::Identity(res_big.rows(), res_big.rows());
-    //         Eigen::MatrixXd R_big = 0 * Eigen::MatrixXd::Identity(res_big.rows(), res_big.rows());
+            // Our noise is isotropic, so make it here after our compression
+            // Eigen::MatrixXd R_big = _options.sigma_pix_sq * Eigen::MatrixXd::Identity(res_big.rows(), res_big.rows());
+            Eigen::MatrixXd R_big = 0 * Eigen::MatrixXd::Identity(res_big.rows(), res_big.rows());
 
-    //         // 6. With all good features update the state
-    //         StateHelper::EKFUpdate(state, Hx_order_big, Hx_big, res_big, R_big);
-    //         rT5 = boost::posix_time::microsec_clock::local_time();
+            // 6. With all good features update the state
+            StateHelper::EKFUpdate(state, Hx_order_big, Hx_big, res_big, R_big);
+            rT5 = boost::posix_time::microsec_clock::local_time();
 
 
-    //     }
+        }
 
-    // }
+    }
 
     _q_laser_last.at(current_lidar) = Eigen::Quaterniond(poseCurr.block<3, 3>(0, 0));
     _t_laser_last.at(current_lidar) = state->_imu->pos();
