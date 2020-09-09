@@ -1,7 +1,7 @@
 /*
  * @Author: your name
  * @Date: 2020-08-21 17:11:54
- * @LastEditTime: 2020-09-02 09:38:32
+ * @LastEditTime: 2020-09-08 19:33:22
  * @LastEditors: Please set LastEditors
  * @Description: In User Settings Edit
  * @FilePath: /open_vins-master/aloam/scanRegistration.h
@@ -86,9 +86,11 @@ class EdgeFeature
 public:
     size_t featid;
     Eigen::Vector3d p_L1;
+    Eigen::Vector3d p_L1inL0;
     Eigen::Vector3d p_L0_a;
     Eigen::Vector3d p_L0_b;
-
+    double timestamp0 = -1;
+    double timestamp1 = -1;
     double res_estimation = 0.0;
 };
 // extern pcl::KdTreeFLANN<pcl::PointXYZI>::Ptr kdtreeCornerLast; //(new pcl::KdTreeFLANN<pcl::PointXYZI>());
@@ -110,7 +112,7 @@ void laserCloudFullResHandler(const sensor_msgs::PointCloud2ConstPtr &laserCloud
 
 int test_odometry(ros::NodeHandle &nh, ros::Publisher &pubLaserCloudCornerLast, ros::Publisher &pubLaserCloudSurfLast, ros::Publisher &pubLaserCloudFullRes, ros::Publisher &pubLaserOdometry, ros::Publisher &pubLaserPath);
 
-int get_correspondences(pcl::KdTreeFLANN<pcl::PointXYZI>::Ptr kdtreeCornerLast, pcl::KdTreeFLANN<pcl::PointXYZI>::Ptr kdtreeSurfLast, pcl::PointCloud<PointType>::Ptr &laserCloudCornerLast, pcl::PointCloud<PointType>::Ptr &laserCloudSurfLast, pcl::PointCloud<PointType>::Ptr &cornerPointsSharp, pcl::PointCloud<PointType>::Ptr &cornerPointsLessSharp, pcl::PointCloud<PointType>::Ptr &surfPointsFlat, pcl::PointCloud<PointType>::Ptr &surfPointsLessFlat, Eigen::Quaterniond q_last_curr, Eigen::Vector3d t_last_curr, std::vector<EdgeFeature> &edge_list);
+int get_correspondences(pcl::KdTreeFLANN<pcl::PointXYZI>::Ptr kdtreeCornerLast, pcl::KdTreeFLANN<pcl::PointXYZI>::Ptr kdtreeSurfLast, pcl::PointCloud<PointType>::Ptr &laserCloudCornerLast, pcl::PointCloud<PointType>::Ptr &laserCloudSurfLast, pcl::PointCloud<PointType>::Ptr &cornerPointsSharp, pcl::PointCloud<PointType>::Ptr &cornerPointsLessSharp, pcl::PointCloud<PointType>::Ptr &surfPointsFlat, pcl::PointCloud<PointType>::Ptr &surfPointsLessFlat, Eigen::Quaterniond q_last_curr, Eigen::Vector3d t_last_curr, std::vector<EdgeFeature> &edge_list, double time0, double time1);
 
 
 #endif

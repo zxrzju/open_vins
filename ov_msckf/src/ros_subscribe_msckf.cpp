@@ -56,7 +56,7 @@ std::unordered_map<size_t, std::string> _topic_lidar;
 
 std::unordered_map<size_t, ros::Subscriber> _sublidar;
 
-std::unordered_map<size_t, double> _lidar_time_buffer;
+std::unordered_map<size_t, double> _lidar_time_buffer, _lidar_time_buffer_last;
 
 std::unordered_map<size_t, pcl::PointCloud<pcl::PointXYZ>::Ptr> _lidar_pc_buffer;
 
@@ -127,6 +127,7 @@ int main(int argc, char **argv)
         _sublidar.insert({i, sublidar});
         _topic_lidar.insert({i, topic_lidar});
         _lidar_time_buffer.insert({i, -1});
+        _lidar_time_buffer_last.insert({i, -1});
 
         pcl::PointCloud<pcl::PointXYZ>::Ptr pc(new pcl::PointCloud<pcl::PointXYZ>());
         _lidar_pc_buffer.insert({i, pc});
@@ -263,7 +264,9 @@ void callback_monocular(const sensor_msgs::ImageConstPtr& msg0) {
 
 
 void callback_laser(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg, std::string &topic, int scans){
-
+    ov_msckf::State *state = sys->get_state();
+    // cout << "cloneIMUs: "<< state->_clones_IMU.size() << endl;
+    
     double timem = laserCloudMsg->header.stamp.toSec();
     pcl::KdTreeFLANN<pcl::PointXYZI>::Ptr kdtreeCornerLast, kdtreeSurfLast;
     pcl::PointCloud<pcl::PointXYZ>::Ptr laserCloudInPtr;
@@ -288,6 +291,7 @@ void callback_laser(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg, std::
     // std::cout << current_lidar << std::endl;
     if(_lidar_time_buffer.at(current_lidar) == -1){
         _lidar_time_buffer.at(current_lidar) = 0;
+        _lidar_time_buffer_last.at(current_lidar) = timem;
         _lidar_pc_buffer.at(current_lidar) = laserCloudInPtr;
         return ;
         }
@@ -332,7 +336,7 @@ void callback_laser(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg, std::
     // lidar_feature_extraction();
     // do_lidar_propagate_update(timestamp, edge_list);
     double timestamp =  _lidar_time_buffer.at(current_lidar);
-    ov_msckf::State *state = sys->get_state();
+
 
     if (state->_timestamp >= timestamp)
     {
@@ -340,21 +344,34 @@ void callback_laser(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg, std::
         printf(YELLOW "lidar received out of order (prop dt = %3f)\n" RESET, (timestamp - state->_timestamp));
         return;
     }
+
     ov_msckf::Propagator *propagator = sys->get_propagator();
+    propagator->propagate_and_clone(state, timestamp);
+
+    if ((int)state->_clones_IMU.size() < std::min(state->_options.max_clone_size, 5))
+    {
+        printf("waiting for enough clone states (%d of %d)....\n", (int)state->_clones_IMU.size(), std::min(state->_options.max_clone_size, 5));
+
+        _lidar_time_buffer_last.at(current_lidar) = _lidar_time_buffer.at(current_lidar);
+        _lidar_time_buffer.at(current_lidar) = timem;
+        _laserCloudCornerLast.at(current_lidar) = cornerPointsLessSharpPtr;
+        _laserCloudSurfLast.at(current_lidar) = surfPointsLessFlatPtr;
+        _lidar_pc_buffer.at(current_lidar) = laserCloudInPtr;
+        return;
+    }
 
     Eigen::Quaterniond q_last = _q_laser_last.at(current_lidar);
     Eigen::Vector3d t_last = _t_laser_last.at(current_lidar);
 
-    // std::cout<<"before:\n"<<state->_imu->pos().transpose()<<std::endl;
     Eigen::Matrix4d poseLast, poseCurr, poseDelta;
     poseLast.block<3, 3>(0, 0) = q_last.toRotationMatrix();
     poseLast.block<3, 1>(0, 3) = t_last;
 
-    propagator->propagate_and_clone(state, timestamp);
+    // propagator->propagate_and_clone(state, timestamp);
 
-    poseCurr.block<3, 3>(0, 0) = state->_imu->Rot();
-    poseCurr.block<3, 1>(0, 3) = state->_imu->pos();
-    // std::cout << "after:\n" << (state->_imu->pos().transpose()) << std::endl;
+    poseCurr.block<3, 3>(0, 0) = state->_clones_IMU.at(_lidar_time_buffer.at(current_lidar))->Rot();
+    poseCurr.block<3, 1>(0, 3) = state->_clones_IMU.at(_lidar_time_buffer.at(current_lidar))->pos();
+        // std::cout << "after:\n" << (state->_imu->pos().transpose()) << std::endl;
 
     poseDelta = poseCurr*Inv_se3(poseLast);
 
@@ -362,24 +379,30 @@ void callback_laser(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg, std::
     Eigen::Matrix<double, 3, 3> R_ItoL = state->_calib_IMUtoLIDAR.at(current_lidar)->Rot();
     Eigen::Matrix<double, 3, 1> p_IinL = state->_calib_IMUtoLIDAR.at(current_lidar)->pos();
 
-    Eigen::Matrix<double, 3, 3> R_last = q_last.toRotationMatrix().transpose();
+    // Eigen::Matrix<double, 3, 3> R_last = q_last.toRotationMatrix();//.transpose();
+    Eigen::Matrix<double, 3, 3> R_last = state->_clones_IMU.at(_lidar_time_buffer_last.at(current_lidar))->Rot();
 
-    Eigen::Matrix<double, 3, 3> R_curr = state->_imu->Rot().transpose();
+    // Eigen::Matrix<double, 3, 3> R_curr = state->_imu->Rot().transpose();
+    Eigen::Matrix<double, 3, 3> R_curr = state->_clones_IMU.at(_lidar_time_buffer.at(current_lidar))->Rot();//.transpose();
+    
+    Eigen::Matrix<double, 3, 3> R_curr_to_last = R_ItoL * R_last * (R_ItoL * R_curr).transpose();
 
-    Eigen::Matrix<double, 3, 3> R_last_curr = R_ItoL * R_last * (R_ItoL * R_curr).transpose();
+    // Eigen::Matrix<double, 3, 1> p_last = t_last;
+    Eigen::Matrix<double, 3, 1> p_last = state->_clones_IMU.at(_lidar_time_buffer_last.at(current_lidar))->pos();
 
-    Eigen::Matrix<double, 3, 1> p_last = t_last;
-    Eigen::Matrix<double, 3, 1> p_curr = state->_imu->pos();
-    Eigen::Matrix<double, 3, 1> p_LinI = -R_ItoL.transpose()*p_IinL;
+    // Eigen::Matrix<double, 3, 1> p_curr = state->_imu->pos();
+    Eigen::Matrix<double, 3, 1> p_curr = state->_clones_IMU.at(_lidar_time_buffer.at(current_lidar))->pos();
+    Eigen::Matrix<double, 3, 1> p_LinI = -R_ItoL.transpose() * p_IinL;
     Eigen::Matrix<double, 3, 1> p_CurrinLast = R_ItoL * R_last * (p_curr - p_last + R_curr.transpose() * p_LinI) + p_IinL;
 
-    Eigen::Quaterniond deltaQ(R_last_curr);
+    Eigen::Quaterniond deltaQ(R_curr_to_last);
     Eigen::Vector3d deltaT = p_CurrinLast;
     // std::cout<<"delta: "<<deltaT.transpose()<<" "<<std::endl;
     // std::cout<<timestamp<<"\n";
 
-    get_correspondences(kdtreeCornerLast, kdtreeSurfLast, laserCloudCornerLast, laserCloudSurfLast, cornerPointsSharpPtr, cornerPointsLessSharpPtr, surfPointsFlatPtr, surfPointsLessFlatPtr, deltaQ, deltaT, edge_list);
+    get_correspondences(kdtreeCornerLast, kdtreeSurfLast, laserCloudCornerLast, laserCloudSurfLast, cornerPointsSharpPtr, cornerPointsLessSharpPtr, surfPointsFlatPtr, surfPointsLessFlatPtr, deltaQ, deltaT, edge_list, (_lidar_time_buffer_last.at(current_lidar)), (_lidar_time_buffer.at(current_lidar)));
 
+    cout<<"clone pose: \n"<<p_last.transpose()<<endl<<p_curr.transpose()<<endl;
     // for (auto &edge : edge_list)
     // {
     //     Eigen::Vector3d num1, num2, dem1;
@@ -420,9 +443,10 @@ void callback_laser(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg, std::
         size_t ct_meas = 0;
 
         // 4. Compute linear system for each feature, nullspace project, and reject
-        auto it2 = feature_vec.begin();
-        while (it2 != feature_vec.end())
+        auto feat = feature_vec.begin();
+        while (feat != feature_vec.end())
         {
+
 
             // Our return values (feature jacobian, state jacobian, residual, and order of state jacobian)
             Eigen::MatrixXd H_f;
@@ -430,7 +454,100 @@ void callback_laser(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg, std::
             Eigen::VectorXd res;
             std::vector<Type *> Hx_order;
 
-            // // get_feature_jacobin_full()
+            // // get_feature_jacobian_full()
+            {
+                int total_hx = 0;
+                std::unordered_map<Type *, size_t> map_hx;
+
+                PoseJPL *calibration = state->_calib_IMUtoLIDAR.at(current_lidar);
+                // If doing lidar extrinsics
+                if (state->_options.do_calib_lidar_pose)
+                {
+                    map_hx.insert({calibration, total_hx});
+                    x_order.push_back(calibration);
+                    total_hx += calibration->size();
+                }
+                // Add this clone if it is not added already
+                PoseJPL *clone_Ci = state->_clones_IMU.at(feat->timestamp0);
+                if (map_hx.find(clone_Ci) == map_hx.end())
+                {
+                    map_hx.insert({clone_Ci, total_hx});
+                    x_order.push_back(clone_Ci);
+                    total_hx += clone_Ci->size();
+                }
+
+                clone_Ci = state->_clones_IMU.at(feat->timestamp1);
+                if (map_hx.find(clone_Ci) == map_hx.end())
+                {
+                    map_hx.insert({clone_Ci, total_hx});
+                    x_order.push_back(clone_Ci);
+                    total_hx += clone_Ci->size();
+                }
+
+
+                Eigen::MatrixXd dpfg_dlambda;
+                std::vector<Eigen::MatrixXd> dpfg_dx, H_x;
+                std::vector<Type *> dpfg_dx_order, x_order;
+                dpfg_dx = H_x;
+                dpfg_dx_order = x_order;
+                // // get_feature_jacobian_representation()
+                {
+                    Eigen::Matrix3d skew_b_a, temp0;
+                    Eigen::Matrix<double, 1, 3> temp1;
+                    Eigen::Vector3d axb;
+                    skew_b_a.noalias() = skew_x(feat->p_L0_b - feat->p_L0_a);
+                    axb = skew_x(feat->p_L0_a)*feat->p_L0_b;
+
+                    temp0 = skew_b_a.transpose()*skew_b_a;
+                    temp1 = axb.transpose()*skew_b_a;
+
+                    Eigen::Matrix<double, 1, 3> dr_dpf = 2*feat->p_L1inL0.transpose()*temp0 + 2*temp1;
+
+                    Eigen::Matrix3d dpf_dr0 = R_ItoL * skew_x(R_last * (R_curr.transpose() * R_ItoL * feat->p_L1 + p_curr - p_last + R_curr.transpose() * p_LinI));
+
+                    Eigen::Matrix3d dpf_dp0 = -R_ItoL * R_last;
+
+                    Eigen::Matrix3d dpf_dr1 = -R_ItoL * R_last * R_curr.transpose() * skew_x(R_ItoL.transpose() * feat->p_L1 + p_LinI);
+
+                    Eigen::Matrix3d dpf_dp1 = R_ItoL * R_last;
+
+                    Eigen::Matrix3d dpf_dril = skew_x(R_curr_to_last * (feat->p_L1 - p_IinL)) - R_curr_to_last * skew_x(feat->p_L1 - p_IinL);
+
+                    Eigen::Matrix3d dpf_dpil = -R_curr_to_last + Eigen::Matrix3d::Identity();
+
+
+
+                    // Jacobian for our anchor pose
+                    Eigen::Matrix<double, 3, 6> H_anc0;
+                    H_anc0.block(0, 0, 3, 3).noalias() = dr_dpf*dpf_dp0;
+                    H_anc0.block(0, 3, 3, 3).noalias() = dr_dpf*dpf_dr0;
+
+                    // Add anchor Jacobians to our return vector
+                    x_order.push_back(state->_clones_IMU.at(feat->timestamp0));
+                    H_x.push_back(H_anc0);
+
+                    // Jacobian for our anchor pose
+                    Eigen::Matrix<double, 3, 6> H_anc1;
+                    H_anc1.block(0, 0, 3, 3).noalias() = dr_dpf*dpf_dp1;
+                    H_anc1.block(0, 3, 3, 3).noalias() = dr_dpf*dpf_dr1;
+
+                    // Add anchor Jacobians to our return vector
+                    x_order.push_back(state->_clones_IMU.at(feat->timestamp1));
+                    H_x.push_back(H_anc1);
+
+                    // Get calibration Jacobians (for anchor clone)
+                    if (state->_options.do_calib_lidar_pose)
+                    {
+                        Eigen::Matrix<double, 3, 6> H_calib;
+                        H_calib.block(0, 0, 3, 3).noalias() = dr_dpf*dpf_dpil;
+                        H_calib.block(0, 3, 3, 3).noalias() = dr_dpf*dpf_dril;
+                        x_order.push_back(state->_calib_IMUtoLIDAR.at(feat->timestamp0));
+                        H_x.push_back(H_calib);
+                    }
+                }
+
+
+            }
 
             // // nullspace_place()
 
@@ -466,53 +583,53 @@ void callback_laser(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg, std::
             //     continue;
             // }
 
-            // We are good!!! Append to our large H vector
-            size_t ct_hx = 0;
-            for (const auto &var : Hx_order)
-            {
+    //         // We are good!!! Append to our large H vector
+    //         size_t ct_hx = 0;
+    //         for (const auto &var : Hx_order)
+    //         {
 
-                // Ensure that this variable is in our Jacobian
-                if (Hx_mapping.find(var) == Hx_mapping.end())
-                {
-                    Hx_mapping.insert({var, ct_jacob});
-                    Hx_order_big.push_back(var);
-                    ct_jacob += var->size();
-                }
+    //             // Ensure that this variable is in our Jacobian
+    //             if (Hx_mapping.find(var) == Hx_mapping.end())
+    //             {
+    //                 Hx_mapping.insert({var, ct_jacob});
+    //                 Hx_order_big.push_back(var);
+    //                 ct_jacob += var->size();
+    //             }
 
-                // Append to our large Jacobian
-                Hx_big.block(ct_meas, Hx_mapping[var], H_x.rows(), var->size()) = H_x.block(0, ct_hx, H_x.rows(), var->size());
-                ct_hx += var->size();
-            }
-            // Append our residual and move forward
-            res_big.block(ct_meas, 0, res.rows(), 1) = res;
-            ct_meas += res.rows();
-            it2++;
+    //             // Append to our large Jacobian
+    //             Hx_big.block(ct_meas, Hx_mapping[var], H_x.rows(), var->size()) = H_x.block(0, ct_hx, H_x.rows(), var->size());
+    //             ct_hx += var->size();
+    //         }
+    //         // Append our residual and move forward
+    //         res_big.block(ct_meas, 0, res.rows(), 1) = res;
+    //         ct_meas += res.rows();
+    //         it2++;
 
-            // Return if we don't have anything and resize our matrices
-            if (ct_meas < 1)
-            {
-                return;
-            }
-            assert(ct_meas <= max_meas_size);
-            assert(ct_jacob <= max_hx_size);
-            res_big.conservativeResize(ct_meas, 1);
-            Hx_big.conservativeResize(ct_meas, ct_jacob);
+    //         // Return if we don't have anything and resize our matrices
+    //         if (ct_meas < 1)
+    //         {
+    //             return;
+    //         }
+    //         assert(ct_meas <= max_meas_size);
+    //         assert(ct_jacob <= max_hx_size);
+    //         res_big.conservativeResize(ct_meas, 1);
+    //         Hx_big.conservativeResize(ct_meas, ct_jacob);
 
-            // 5. Perform measurement compression
-            UpdaterHelper::measurement_compress_inplace(Hx_big, res_big);
-            if (Hx_big.rows() < 1)
-            {
-                return;
-            }
-            rT4 = boost::posix_time::microsec_clock::local_time();
+    //         // 5. Perform measurement compression
+    //         UpdaterHelper::measurement_compress_inplace(Hx_big, res_big);
+    //         if (Hx_big.rows() < 1)
+    //         {
+    //             return;
+    //         }
+    //         rT4 = boost::posix_time::microsec_clock::local_time();
 
-            // Our noise is isotropic, so make it here after our compression
-            // Eigen::MatrixXd R_big = _options.sigma_pix_sq * Eigen::MatrixXd::Identity(res_big.rows(), res_big.rows());
-            Eigen::MatrixXd R_big = 0 * Eigen::MatrixXd::Identity(res_big.rows(), res_big.rows());
+    //         // Our noise is isotropic, so make it here after our compression
+    //         // Eigen::MatrixXd R_big = _options.sigma_pix_sq * Eigen::MatrixXd::Identity(res_big.rows(), res_big.rows());
+    //         Eigen::MatrixXd R_big = 0 * Eigen::MatrixXd::Identity(res_big.rows(), res_big.rows());
 
-            // 6. With all good features update the state
-            StateHelper::EKFUpdate(state, Hx_order_big, Hx_big, res_big, R_big);
-            rT5 = boost::posix_time::microsec_clock::local_time();
+    //         // 6. With all good features update the state
+    //         StateHelper::EKFUpdate(state, Hx_order_big, Hx_big, res_big, R_big);
+    //         rT5 = boost::posix_time::microsec_clock::local_time();
 
 
         }
@@ -520,9 +637,12 @@ void callback_laser(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg, std::
     }
 
     _q_laser_last.at(current_lidar) = Eigen::Quaterniond(poseCurr.block<3, 3>(0, 0));
-    _t_laser_last.at(current_lidar) = state->_imu->pos();
+    _t_laser_last.at(current_lidar) = state->_clones_IMU.at(_lidar_time_buffer.at(current_lidar))->pos();
+
+    StateHelper::marginalize_old_clone(state);
 
     printf("sharp corner: %d, edge feature: %d\n", cornerPointsSharp.size(), edge_list.size());
+    _lidar_time_buffer_last.at(current_lidar) = _lidar_time_buffer.at(current_lidar);
     _lidar_time_buffer.at(current_lidar) = timem;
     _laserCloudCornerLast.at(current_lidar) = cornerPointsLessSharpPtr;
     _laserCloudSurfLast.at(current_lidar) = surfPointsLessFlatPtr;

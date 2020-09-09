@@ -410,6 +410,7 @@ void VioManager::do_feature_propagate_update(double timestamp) {
     // Also augment it with a new clone!
     propagator->propagate_and_clone(state, timestamp);
     rT3 =  boost::posix_time::microsec_clock::local_time();
+    // cout << "cloneIMU_s: " << state->_clones_IMU.size() << endl;
 
     // If we have not reached max clones, we should just return...
     // This isn't super ideal, but it keeps the logic after this easier...

@@ -181,7 +181,7 @@ void TransformToEnd(PointType const *const pi, PointType *const po, Eigen::Quate
 //     mBuf.unlock();
 // }
 
-int get_correspondences(pcl::KdTreeFLANN<pcl::PointXYZI>::Ptr kdtreeCornerLast, pcl::KdTreeFLANN<pcl::PointXYZI>::Ptr kdtreeSurfLast, pcl::PointCloud<PointType>::Ptr &laserCloudCornerLast, pcl::PointCloud<PointType>::Ptr &laserCloudSurfLast, pcl::PointCloud<PointType>::Ptr &cornerPointsSharp, pcl::PointCloud<PointType>::Ptr &cornerPointsLessSharp, pcl::PointCloud<PointType>::Ptr &surfPointsFlat, pcl::PointCloud<PointType>::Ptr &surfPointsLessFlat, Eigen::Quaterniond q_last_curr, Eigen::Vector3d t_last_curr, std::vector<EdgeFeature> &edge_list)
+int get_correspondences(pcl::KdTreeFLANN<pcl::PointXYZI>::Ptr kdtreeCornerLast, pcl::KdTreeFLANN<pcl::PointXYZI>::Ptr kdtreeSurfLast, pcl::PointCloud<PointType>::Ptr &laserCloudCornerLast, pcl::PointCloud<PointType>::Ptr &laserCloudSurfLast, pcl::PointCloud<PointType>::Ptr &cornerPointsSharp, pcl::PointCloud<PointType>::Ptr &cornerPointsLessSharp, pcl::PointCloud<PointType>::Ptr &surfPointsFlat, pcl::PointCloud<PointType>::Ptr &surfPointsLessFlat, Eigen::Quaterniond q_last_curr, Eigen::Vector3d t_last_curr, std::vector<EdgeFeature> &edge_list, double time0, double time1)
 {
     int cornerPointsSharpNum = cornerPointsSharp->points.size();
     int surfPointsFlatNum = surfPointsFlat->points.size();
@@ -278,9 +278,11 @@ int get_correspondences(pcl::KdTreeFLANN<pcl::PointXYZI>::Ptr kdtreeCornerLast, 
                 EdgeFeature edge;
                 edge.featid = corner_correspondence;
                 edge.p_L1 = curr_point;
+                edge.p_L1inL0 = Eigen::Vector3d(pointSel.x, pointSel.y, pointSel.z);
                 edge.p_L0_a = last_point_a;
                 edge.p_L0_b = last_point_b;
-
+                edge.timestamp0 = time0;
+                edge.timestamp1 = time1;
                 edge.res_estimation = 0;
 
                 edge_list.push_back(edge);
