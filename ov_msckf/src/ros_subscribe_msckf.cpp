@@ -452,7 +452,7 @@ void callback_laser(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg, std::
             Eigen::MatrixXd H_f;
             Eigen::MatrixXd H_x;
             Eigen::VectorXd res;
-            std::vector<Type *> Hx_order;
+            std::vector<Type *> Hx_order, x_order;
 
             // // get_feature_jacobian_full()
             {
@@ -483,6 +483,15 @@ void callback_laser(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg, std::
                     x_order.push_back(clone_Ci);
                     total_hx += clone_Ci->size();
                 }
+
+                // Allocate our residual and Jacobians
+                int c = 0;
+                int jacobsize = 3;
+
+                res = Eigen::VectorXd::Zero(1 * 1);
+                H_f = Eigen::MatrixXd::Zero(1 * 1, jacobsize);
+                H_x = Eigen::MatrixXd::Zero(1 * 1, total_hx);
+
 
 
                 Eigen::MatrixXd dpfg_dlambda;
@@ -545,10 +554,20 @@ void callback_laser(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg, std::
                         H_x.push_back(H_calib);
                     }
                 }
+                dpfg_dx = H_x;
+                dpfg_dx_order = x_order;
 
-
+                // Assert that all the ones in our order are already in our local jacobian mapping
+                for (auto &type : dpfg_dx_order)
+                {
+                    assert(map_hx.find(type) != map_hx.end());
+                }
+                
             }
+            
 
+            
+            Hx_order = x_order;
             // // nullspace_place()
 
             /// Chi2 distance check
