@@ -74,7 +74,18 @@ namespace ov_msckf {
             }
             return time;
         }
-
+        double margtimestep_lidar()
+        {
+            double time = INFINITY;
+            for (std::pair<const double, PoseJPL *> &clone_imu : _clones_IMU_lidar)
+            {
+                if (clone_imu.first < time)
+                {
+                    time = clone_imu.first;
+                }
+            }
+            return time;
+        }
         /**
          * @brief Calculates the current max size of the covariance
          * @return Size of the current covariance matrix
@@ -94,7 +105,9 @@ namespace ov_msckf {
         IMU *_imu;
 
         /// Map between imaging times and clone poses (q_GtoIi, p_IiinG)
-        std::map<double, PoseJPL*> _clones_IMU;
+        std::map<double, PoseJPL *> _clones_IMU;
+        /// Map between imaging times and clone poses (q_GtoIi, p_IiinG)
+        std::map<double, PoseJPL *> _clones_IMU_lidar;
 
         /// Our current set of SLAM features (3d positions)
         std::unordered_map<size_t, Landmark*> _features_SLAM;

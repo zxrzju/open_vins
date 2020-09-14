@@ -155,6 +155,11 @@ namespace ov_msckf {
         /// Map between camid and lidar extrinsics (q_ItoL, p_IinL).
         std::map<size_t, Eigen::VectorXd> lidar_extrinsics;
 
+        //
+
+        /// Covariance for our raw pixel measurements
+        double sigma_pix_lidar = 1;
+
         /**
          * @brief This function will print out all simulated parameters loaded.
          * This allows for visual checking that everything was loaded properly from ROS/CMD parsers.

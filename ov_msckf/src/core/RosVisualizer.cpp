@@ -566,7 +566,6 @@ void RosVisualizer::publish_features() {
 
 
 void RosVisualizer::publish_groundtruth() {
-    static bool isFirst = true;
     // Our groundtruth state
     Eigen::Matrix<double,17,1> state_gt;
 
@@ -596,6 +595,7 @@ void RosVisualizer::publish_groundtruth() {
     static Eigen::Vector3d p_T0inG;
     static Eigen::Vector3d p_T0inI;
 
+    static bool isFirst = true;
     if (isFirst){
         isFirst = false;
         R_ItoT0 = quat_2_Rot(state_ekf.block<4, 1>(0, 0));

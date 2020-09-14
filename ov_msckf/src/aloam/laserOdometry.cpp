@@ -180,7 +180,14 @@ void TransformToEnd(PointType const *const pi, PointType *const po, Eigen::Quate
 //     fullPointsBuf.push(laserCloudFullRes2);
 //     mBuf.unlock();
 // }
-
+inline Eigen::Matrix<double, 3, 3> skew_x(const Eigen::Matrix<double, 3, 1> &w)
+{
+    Eigen::Matrix<double, 3, 3> w_x;
+    w_x << 0, -w(2), w(1),
+        w(2), 0, -w(0),
+        -w(1), w(0), 0;
+    return w_x;
+}
 int get_correspondences(pcl::KdTreeFLANN<pcl::PointXYZI>::Ptr kdtreeCornerLast, pcl::KdTreeFLANN<pcl::PointXYZI>::Ptr kdtreeSurfLast, pcl::PointCloud<PointType>::Ptr &laserCloudCornerLast, pcl::PointCloud<PointType>::Ptr &laserCloudSurfLast, pcl::PointCloud<PointType>::Ptr &cornerPointsSharp, pcl::PointCloud<PointType>::Ptr &cornerPointsLessSharp, pcl::PointCloud<PointType>::Ptr &surfPointsFlat, pcl::PointCloud<PointType>::Ptr &surfPointsLessFlat, Eigen::Quaterniond q_last_curr, Eigen::Vector3d t_last_curr, std::vector<EdgeFeature> &edge_list, double time0, double time1)
 {
     int cornerPointsSharpNum = cornerPointsSharp->points.size();
@@ -283,7 +290,13 @@ int get_correspondences(pcl::KdTreeFLANN<pcl::PointXYZI>::Ptr kdtreeCornerLast, 
                 edge.p_L0_b = last_point_b;
                 edge.timestamp0 = time0;
                 edge.timestamp1 = time1;
-                edge.res_estimation = 0;
+
+                Eigen::Vector3d num1, num2, dem1;
+
+                num1 = skew_x(edge.p_L1 - edge.p_L0_a) * (edge.p_L1 - edge.p_L0_b);
+                dem1 = edge.p_L0_a - edge.p_L0_b;
+
+                edge.res_estimation = sqrt(double(num1.transpose() * num1) / double(dem1.transpose() * dem1));
 
                 edge_list.push_back(edge);
 

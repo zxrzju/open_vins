@@ -211,7 +211,7 @@ int scan_registration(pcl::PointCloud<pcl::PointXYZ> &laserCloudIn, pcl::PointCl
     }
 
     cloudSize = count;
-    printf("points size %d \n", cloudSize);
+    // printf("points size %d \n", cloudSize);
 
     // pcl::PointCloud<PointType>::Ptr laserCloud(new pcl::PointCloud<PointType>());
     for (int i = 0; i < N_SCANS; i++)
@@ -507,7 +507,7 @@ void laserCloudHandler(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg)
     }
     
     cloudSize = count;
-    printf("points size %d \n", cloudSize);
+    // printf("points size %d \n", cloudSize);
 // 
     pcl::PointCloud<PointType>::Ptr laserCloud(new pcl::PointCloud<PointType>());
     for (int i = 0; i < N_SCANS; i++)

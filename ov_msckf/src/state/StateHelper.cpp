@@ -578,3 +578,39 @@ void StateHelper::augment_clone(State *state, Eigen::Matrix<double, 3, 1> last_w
 
 }
 
+void StateHelper::augment_clone_lidar(State *state, Eigen::Matrix<double, 3, 1> last_w)
+{
+
+    // Call on our marginalizer to clone, it will add it to our vector of types
+    // NOTE: this will clone the clone pose to the END of the covariance...
+    Type *posetemp = StateHelper::clone(state, state->_imu->pose());
+
+    // Cast to a JPL pose type
+    PoseJPL *pose = dynamic_cast<PoseJPL *>(posetemp);
+
+    // Check that it was a valid cast
+    if (pose == nullptr)
+    {
+        printf(RED "INVALID OBJECT RETURNED FROM STATEHELPER CLONE, EXITING!#!@#!@#\n" RESET);
+        std::exit(EXIT_FAILURE);
+    }
+
+    // Append the new clone to our clone vector
+    state->_clones_IMU_lidar.insert({state->_timestamp, pose});
+
+    // If we are doing time calibration, then our clones are a function of the time offset
+    // Logic is based on Mingyang Li and Anastasios I. Mourikis paper:
+    // http://journals.sagepub.com/doi/pdf/10.1177/0278364913515286
+    // if (state->_options.do_calib_camera_timeoffset)
+    // {
+    //     // Jacobian to augment by
+    //     Eigen::Matrix<double, 6, 1> dnc_dt = Eigen::MatrixXd::Zero(6, 1);
+    //     dnc_dt.block(0, 0, 3, 1) = last_w;
+    //     dnc_dt.block(3, 0, 3, 1) = state->_imu->vel();
+    //     // Augment covariance with time offset Jacobian
+    //     state->_Cov.block(0, pose->id(), state->_Cov.rows(), 6) +=
+    //         state->_Cov.block(0, state->_calib_dt_CAMtoIMU->id(), state->_Cov.rows(), 1) * dnc_dt.transpose();
+    //     state->_Cov.block(pose->id(), 0, 6, state->_Cov.rows()) +=
+    //         dnc_dt * state->_Cov.block(state->_calib_dt_CAMtoIMU->id(), 0, 1, state->_Cov.rows());
+    // }
+}

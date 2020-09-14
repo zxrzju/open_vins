@@ -11,20 +11,17 @@
     <arg name="path_est"    default="/tmp/traj_estimate.txt" />
     <arg name="path_time"   default="/tmp/traj_timing.txt" />
 
-    <!-- MASTER NODE! launch-prefix="xterm -e gdb - -args"-->
 
-    <node name="run_subscribe_msckf" pkg="ov_msckf" type="run_subscribe_msckf" output="screen" clear_params="true" required="false" >
+    <!-- MASTER NODE! -->
+    <node name="run_subscribe_msckf" pkg="ov_msckf" type="run_subscribe_msckf" output="screen" clear_params="true" required="true">
+
+        <param name="path_gt"  type="string" value="/home/csc105/dataset/KAIST/urban39-pankyo/global_pose_asl.csv" />
+
 
         <!-- bag topics -->
         <param name="topic_imu"      type="string" value="/imu/data_raw" />
         <param name="topic_camera0"  type="string" value="/stereo/left/image_mono" />
         <param name="topic_camera1"  type="string" value="/stereo/right/image_mono" />
-
-        <param name="path_bag"    type="string" value="/home/csc105/dataset/KAIST/urban39-pankyo/urban39_lic.bag" />
-        <param name="bag_start"   type="int"    value="0" />
-        <param name="bag_durr"    type="int"    value="-1" />
-
-        <param name="path_gt"  type="string" value="/home/csc105/dataset/KAIST/urban39-pankyo/global_pose_asl.csv" />
 
         <!-- world/filter parameters -->
         <param name="use_fej"                type="bool"   value="true" />
@@ -36,10 +33,10 @@
         <param name="calib_cam_timeoffset"   type="bool"   value="true" />
         <param name="calib_camimu_dt"        type="double" value="0.0" />
         <param name="max_clones"             type="int"    value="15" />
-        <param name="max_slam"               type="int"    value="50" /> <!-- 50 -->
+        <param name="max_slam"               type="int"    value="50" />
         <param name="max_slam_in_update"     type="int"    value="25" /> <!-- 25 seems to work well -->
-        <param name="max_msckf_in_update"    type="int"    value="999" /> <!-- 999-->
-        <param name="max_cameras"            type="int"    value="1" />
+        <param name="max_msckf_in_update"    type="int"    value="999" />
+        <param name="max_cameras"            type="int"    value="2" />
         <param name="dt_slam_delay"          type="double" value="3" />
         <param name="init_window_time"       type="double" value="$(arg init_window_time)" />
         <param name="init_imu_thresh"        type="double" value="$(arg init_imu_thresh)" />
@@ -47,18 +44,6 @@
         <param name="feat_rep_msckf"         type="string" value="ANCHORED_MSCKF_INVERSE_DEPTH" />
         <param name="feat_rep_slam"          type="string" value="ANCHORED_MSCKF_INVERSE_DEPTH" />
         <param name="feat_rep_aruco"         type="string" value="ANCHORED_MSCKF_INVERSE_DEPTH" />
-
-        <param name="max_lidars"            type="int"    value="0" />
-        <param name="max_loam"               type="int"    value="999" />
-        <param name="max_loam_in_update"     type="int"    value="100"/> <!-- 25 seems to work well -->
-        <param name="scans"     type="int"    value="16" /> <!-- 25 seems to work well -->
-        
-        <param name="calib_lidar_extrinsics"   type="bool"   value="true" />
-        <param name="calib_lidar_timeoffset"   type="bool"   value="false" />
-        <param name="topic_lidar0"  type="string" value="/ns1/velodyne_points" />
-        <param name="topic_lidar1"  type="string" value="/ns2/velodyne_points" />
-        <param name="up_msckf_sigma_lidar"            type="double"   value="2" />
-
 
         <!-- zero velocity update parameters -->
         <param name="try_zupt"               type="bool"   value="false" />
@@ -104,8 +89,8 @@
         <!-- camera intrinsics -->
         <rosparam param="cam0_wh">[1280, 560]</rosparam>
         <rosparam param="cam1_wh">[1280, 560]</rosparam>
-        <param name="cam0_is_fisheye" type="bool" value="false" />
-        <param name="cam1_is_fisheye" type="bool" value="false" />
+        <param name="cam0_is_fisheye" type="bool" value="true" />
+        <param name="cam1_is_fisheye" type="bool" value="true" />
         <rosparam param="cam0_k">[8.1690378992770002e+02,8.1156803828490001e+02,6.0850726281690004e+02,2.6347599764440002e+02]</rosparam>
         <rosparam param="cam0_d">[-5.6143027800000002e-02,1.3952563200000001e-01,-1.2155906999999999e-03,-9.7281389999999998e-04]</rosparam>
         <rosparam param="cam1_k">[8.1378205539589999e+02,8.0852165574269998e+02,6.1386419539320002e+02,2.4941049348650000e+02]</rosparam>
@@ -128,29 +113,15 @@
         0.00000,0.00000,0.00000,1.00000
         ]
         </rosparam>
-        <rosparam param="T_L0toI">
-        [
-        -0.514521,0.701075,-0.493723,-0.263596,
-        -0.492472,-0.712956,-0.499164,-0.373928,
-        -0.701954,-0.0136853,0.712091,0.243770,
-        0.0,0.0,0.0,1.0
-        ]
-        </rosparam>
-        <rosparam param="T_L1toI">
-        [
-        -0.516377,-0.702254,-0.490096,-0.264623,
-        0.491997,-0.711704,0.501414,0.431973,
-        -0.700923,0.0177927,0.713015,0.240430,
-        0.0,0.0,0.0,1.0
-        ]
-        </rosparam>
 
+        <param name="max_lidars"            type="int"    value="0" />
 
     </node>
+
     <node type="rviz" name="rviz1" pkg="rviz" args="-d $(find ov_msckf)/launch/display.rviz" />
 
-    <node pkg="rosbag" type="play" name="rosbag" args="-r 2 -d 1 -s $(arg bag_start) $(arg bag)" required="false"/>
 
+    <node pkg="rosbag" type="play" name="rosbag" args="-r 2 -d 1 -s $(arg bag_start) $(arg bag)" required="true"/>
     <!-- record the trajectory if enabled -->
     <!-- <group if="$(arg dosave)">
         <node name="recorder_estimate" pkg="ov_eval" type="pose_to_file" output="screen" required="true">

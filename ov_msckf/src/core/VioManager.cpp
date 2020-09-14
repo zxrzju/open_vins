@@ -463,6 +463,7 @@ void VioManager::do_feature_propagate_update(double timestamp) {
         // See if any of our camera's reached max track
         bool reached_max = false;
         for (const auto &cams: (*it2)->timestamps) {
+            // cout<<"cam.second.size: "<<(int)cams.second.size() <<endl;
             if ((int)cams.second.size() > state->_options.max_clone_size) {
                 reached_max = true;
                 break;
@@ -485,6 +486,7 @@ void VioManager::do_feature_propagate_update(double timestamp) {
         it0++;
     }
 
+    // cout << "feats_maxtracks.size()  " << feats_maxtracks.size() << " " << state->_options.max_clone_size << endl;
     // Append a new SLAM feature if we have the room to do so
     // Also check that we have waited our delay amount (normally prevents bad first set of slam points)
     if(state->_options.max_slam_features > 0 && timestamp-startup_time >= params.dt_slam_delay && (int)state->_features_SLAM.size() < state->_options.max_slam_features+curr_aruco_tags) {
@@ -498,7 +500,7 @@ void VioManager::do_feature_propagate_update(double timestamp) {
             feats_maxtracks.erase(feats_maxtracks.end()-valid_amount, feats_maxtracks.end());
         }
     }
-
+    // cout << "feats_slam " << feats_slam.size() << endl;
     // Loop through current SLAM features, we have tracks of them, grab them for this update!
     // Note: if we have a slam feature that has lost tracking, then we should marginalize it out
     // Note: if you do not use FEJ, these types of slam features *degrade* the estimator performance....

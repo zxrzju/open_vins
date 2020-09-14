@@ -201,7 +201,7 @@ namespace ov_msckf {
          * @param last_w The estimated angular velocity at cloning time (used to estimate imu-cam time offset)
          */
         static void augment_clone(State *state, Eigen::Matrix<double, 3, 1> last_w);
-
+        static void augment_clone_lidar(State *state, Eigen::Matrix<double, 3, 1> last_w);
 
         /**
          * @brief Remove the oldest clone, if we have more then the max clone count!!
@@ -222,7 +222,18 @@ namespace ov_msckf {
                 state->_clones_IMU.erase(marginal_time);
             }
         }
-
+        static void marginalize_old_clone_lidar(State *state)
+        {
+            if ((int)state->_clones_IMU_lidar.size() > state->_options.max_clone_size)
+            {
+                double marginal_time = state->margtimestep_lidar();
+                assert(marginal_time != INFINITY);
+                StateHelper::marginalize(state, state->_clones_IMU_lidar.at(marginal_time));
+                // Note that the marginalizer should have already deleted the clone
+                // Thus we just need to remove the pointer to it from our state
+                state->_clones_IMU_lidar.erase(marginal_time);
+            }
+        }
         /**
          * @brief Marginalize bad SLAM features
          * @param state Pointer to state

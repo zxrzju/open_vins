@@ -258,6 +258,7 @@ void UpdaterMSCKF::update(State *state, std::vector<Feature*>& feature_vec) {
 
     // Our noise is isotropic, so make it here after our compression
     Eigen::MatrixXd R_big = _options.sigma_pix_sq*Eigen::MatrixXd::Identity(res_big.rows(),res_big.rows());
+    // cout << "H_x.rows() <= H_x.cols(): " << (Hx_big.rows()) << " " << (Hx_big.cols()) << " " << (res_big.rows()) << " " << (res_big.cols()) << endl;
 
     // 6. With all good features update the state
     StateHelper::EKFUpdate(state, Hx_order_big, Hx_big, res_big, R_big);

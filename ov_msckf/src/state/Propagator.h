@@ -164,7 +164,7 @@ namespace ov_msckf {
          * @param timestamp Time to propagate to and clone at
          */
         void propagate_and_clone(State *state, double timestamp);
-
+        void propagate_and_clone_lidar(State *state, double timestamp);
 
         /**
          * @brief Gets what the state and its covariance will be at a given timestamp

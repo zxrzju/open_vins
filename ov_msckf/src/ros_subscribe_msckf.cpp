@@ -83,6 +83,7 @@ ros::Publisher pubLaserCloudFullRes;
 ros::Publisher pubLaserOdometry;
 ros::Publisher pubLaserPath;
 VioManagerOptions params;
+std::map<int, double> chi_squared_table;
 
 // Main function
 int main(int argc, char **argv)
@@ -115,7 +116,11 @@ int main(int argc, char **argv)
     // pubLaserPath = nh.advertise<nav_msgs::Path>("/laser_odom_path", 100);
     // pcl::PointCloud<PointType>::Ptr laserCloudInPtr(new pcl::PointCloud<PointType>());
 
-
+    for (int i = 1; i < 500; i++)
+    {
+        boost::math::chi_squared chi_squared_dist(i);
+        chi_squared_table[i] = boost::math::quantile(chi_squared_dist, 0.95);
+    }
 
     // // aloamInit(nh);
     for (int i = 0; i < params.state_options.num_lidars; i++)
@@ -262,12 +267,26 @@ void callback_monocular(const sensor_msgs::ImageConstPtr& msg0) {
 
 }
 
-
+// double time_buf = 0;
 void callback_laser(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg, std::string &topic, int scans){
     ov_msckf::State *state = sys->get_state();
-    // cout << "cloneIMUs: "<< state->_clones_IMU.size() << endl;
-    
+    // cout << "cloneIMUs: "<< state->_clones_IMU_lidar.size() << endl;
+
     double timem = laserCloudMsg->header.stamp.toSec();
+
+
+    // ov_msckf::Propagator *propagator = sys->get_propagator();
+    // propagator->propagate_and_clone_lidar(state, time_buf);
+    // time_buf = timem;
+    // if ((int)state->_clones_IMU_lidar.size() < std::min(state->_options.max_clone_size, 5))
+    // {
+    //     printf("waiting for enough clone states (%d of %d)....\n", (int)state->_clones_IMU_lidar.size(), std::min(state->_options.max_clone_size, 5));
+    //     return;
+    // }
+
+
+
+
     pcl::KdTreeFLANN<pcl::PointXYZI>::Ptr kdtreeCornerLast, kdtreeSurfLast;
     pcl::PointCloud<pcl::PointXYZ>::Ptr laserCloudInPtr;
     pcl::PointCloud<pcl::PointXYZ>::Ptr lastLaserCloudPtr;
@@ -346,11 +365,11 @@ void callback_laser(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg, std::
     }
 
     ov_msckf::Propagator *propagator = sys->get_propagator();
-    propagator->propagate_and_clone(state, timestamp);
+    propagator->propagate_and_clone_lidar(state, timestamp);
 
-    if ((int)state->_clones_IMU.size() < std::min(state->_options.max_clone_size, 5))
+    if ((int)state->_clones_IMU_lidar.size() < std::min(state->_options.max_clone_size, 5))
     {
-        printf("waiting for enough clone states (%d of %d)....\n", (int)state->_clones_IMU.size(), std::min(state->_options.max_clone_size, 5));
+        printf("waiting for enough clone states (%d of %d)....\n", (int)state->_clones_IMU_lidar.size(), std::min(state->_options.max_clone_size, 5));
 
         _lidar_time_buffer_last.at(current_lidar) = _lidar_time_buffer.at(current_lidar);
         _lidar_time_buffer.at(current_lidar) = timem;
@@ -369,9 +388,9 @@ void callback_laser(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg, std::
 
     // propagator->propagate_and_clone(state, timestamp);
 
-    poseCurr.block<3, 3>(0, 0) = state->_clones_IMU.at(_lidar_time_buffer.at(current_lidar))->Rot();
-    poseCurr.block<3, 1>(0, 3) = state->_clones_IMU.at(_lidar_time_buffer.at(current_lidar))->pos();
-        // std::cout << "after:\n" << (state->_imu->pos().transpose()) << std::endl;
+    poseCurr.block<3, 3>(0, 0) = state->_clones_IMU_lidar.at(_lidar_time_buffer.at(current_lidar))->Rot();
+    poseCurr.block<3, 1>(0, 3) = state->_clones_IMU_lidar.at(_lidar_time_buffer.at(current_lidar))->pos();
+    // std::cout << "after:\n" << (state->_imu->pos().transpose()) << std::endl;
 
     poseDelta = poseCurr*Inv_se3(poseLast);
 
@@ -380,18 +399,18 @@ void callback_laser(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg, std::
     Eigen::Matrix<double, 3, 1> p_IinL = state->_calib_IMUtoLIDAR.at(current_lidar)->pos();
 
     // Eigen::Matrix<double, 3, 3> R_last = q_last.toRotationMatrix();//.transpose();
-    Eigen::Matrix<double, 3, 3> R_last = state->_clones_IMU.at(_lidar_time_buffer_last.at(current_lidar))->Rot();
+    Eigen::Matrix<double, 3, 3> R_last = state->_clones_IMU_lidar.at(_lidar_time_buffer_last.at(current_lidar))->Rot().transpose();
 
     // Eigen::Matrix<double, 3, 3> R_curr = state->_imu->Rot().transpose();
-    Eigen::Matrix<double, 3, 3> R_curr = state->_clones_IMU.at(_lidar_time_buffer.at(current_lidar))->Rot();//.transpose();
-    
+    Eigen::Matrix<double, 3, 3> R_curr = state->_clones_IMU_lidar.at(_lidar_time_buffer.at(current_lidar))->Rot().transpose();
+
     Eigen::Matrix<double, 3, 3> R_curr_to_last = R_ItoL * R_last * (R_ItoL * R_curr).transpose();
 
     // Eigen::Matrix<double, 3, 1> p_last = t_last;
-    Eigen::Matrix<double, 3, 1> p_last = state->_clones_IMU.at(_lidar_time_buffer_last.at(current_lidar))->pos();
+    Eigen::Matrix<double, 3, 1> p_last = state->_clones_IMU_lidar.at(_lidar_time_buffer_last.at(current_lidar))->pos();
 
     // Eigen::Matrix<double, 3, 1> p_curr = state->_imu->pos();
-    Eigen::Matrix<double, 3, 1> p_curr = state->_clones_IMU.at(_lidar_time_buffer.at(current_lidar))->pos();
+    Eigen::Matrix<double, 3, 1> p_curr = state->_clones_IMU_lidar.at(_lidar_time_buffer.at(current_lidar))->pos();
     Eigen::Matrix<double, 3, 1> p_LinI = -R_ItoL.transpose() * p_IinL;
     Eigen::Matrix<double, 3, 1> p_CurrinLast = R_ItoL * R_last * (p_curr - p_last + R_curr.transpose() * p_LinI) + p_IinL;
 
@@ -402,15 +421,7 @@ void callback_laser(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg, std::
 
     get_correspondences(kdtreeCornerLast, kdtreeSurfLast, laserCloudCornerLast, laserCloudSurfLast, cornerPointsSharpPtr, cornerPointsLessSharpPtr, surfPointsFlatPtr, surfPointsLessFlatPtr, deltaQ, deltaT, edge_list, (_lidar_time_buffer_last.at(current_lidar)), (_lidar_time_buffer.at(current_lidar)));
 
-    cout<<"clone pose: \n"<<p_last.transpose()<<endl<<p_curr.transpose()<<endl;
-    // for (auto &edge : edge_list)
-    // {
-    //     Eigen::Vector3d num1, num2, dem1;
-
-    //     num1 = skew_x(edge.p_L1 - edge.p_L0_a) * (edge.p_L1 - edge.p_L0_b);
-    //     dem1 = edge.p_L0_a - edge.p_L0_b;
-    //     cout << "distance: "<<sqrt(double(num1.transpose() * num1)/double(dem1.transpose() * dem1)) << endl;
-    // }
+    // cout<<"clone pose: \n"<<p_last.transpose()<<endl<<p_curr.transpose()<<endl;
 
 
     // // // UpdateMSCKF
@@ -428,7 +439,8 @@ void callback_laser(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg, std::
         rT0 = boost::posix_time::microsec_clock::local_time();
 
         // Calculate the max possible measurement size
-        size_t max_meas_size = 3*feature_vec.size();
+        // residual dim 1
+        size_t max_meas_size = feature_vec.size();
 
         // Calculate max possible state size (i.e. the size of our covariance)
         // NOTE: that when we have the single inverse depth representations, those are only 1dof in size
@@ -436,83 +448,88 @@ void callback_laser(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg, std::
 
         // Large Jacobian and residual of *all* features for this update
         Eigen::VectorXd res_big = Eigen::VectorXd::Zero(max_meas_size);
+        // cout<<"res_big: "<<(res_big.rows())<<" "<<(res_big.cols())<<endl;
         Eigen::MatrixXd Hx_big = Eigen::MatrixXd::Zero(max_meas_size, max_hx_size);
+        // cout << "Hx_big: " << (Hx_big.rows()) << " " << (Hx_big.cols()) << endl;
+
+        // Our noise is isotropic, so make it here after our compression
+        Eigen::MatrixXd R_big = params.sigma_pix_lidar * Eigen::MatrixXd::Identity(res_big.rows(), res_big.rows());
+
         std::unordered_map<Type *, size_t> Hx_mapping;
         std::vector<Type *> Hx_order_big;
         size_t ct_jacob = 0;
         size_t ct_meas = 0;
 
+        // H_x only related to clone poses and calibration
+
+        PoseJPL *calibration = state->_calib_IMUtoLIDAR.at(current_lidar);
+        // If doing lidar extrinsics
+
+        // Add this clone if it is not added already
+        PoseJPL *clone_I0 = state->_clones_IMU_lidar.at(feature_vec[0].timestamp0);
+        if (Hx_mapping.find(clone_I0) == Hx_mapping.end())
+        {
+            Hx_mapping.insert({clone_I0, ct_jacob});
+            Hx_order_big.push_back(clone_I0);
+            ct_jacob += clone_I0->size();
+        }
+
+        PoseJPL *clone_I1 = state->_clones_IMU_lidar.at(feature_vec[0].timestamp1);
+        if (Hx_mapping.find(clone_I1) == Hx_mapping.end())
+        {
+            Hx_mapping.insert({clone_I1, ct_jacob});
+            Hx_order_big.push_back(clone_I1);
+            ct_jacob += clone_I1->size();
+        }
+
+        if (state->_options.do_calib_lidar_pose)
+        {
+            Hx_mapping.insert({calibration, ct_jacob});
+            Hx_order_big.push_back(calibration);
+            ct_jacob += calibration->size();
+        }
+
+
         // 4. Compute linear system for each feature, nullspace project, and reject
         auto feat = feature_vec.begin();
         while (feat != feature_vec.end())
         {
-
-
             // Our return values (feature jacobian, state jacobian, residual, and order of state jacobian)
             Eigen::MatrixXd H_f;
             Eigen::MatrixXd H_x;
+            Eigen::MatrixXd R_x;
             Eigen::VectorXd res;
-            std::vector<Type *> Hx_order, x_order;
+
+            int total_hx = ct_jacob;
+            std::unordered_map<Type *, size_t> map_hx;
+
+
+            // Allocate our residual and Jacobians
+            int c = 0;
+            int jacobsize = 3;
+
+            R_x = Eigen::VectorXd::Zero(1 * 1);
+            res = Eigen::VectorXd::Zero(1 * 1);
+            H_f = Eigen::MatrixXd::Zero(1 * 1, jacobsize);
+            H_x = Eigen::MatrixXd::Zero(1 * 1, total_hx);
 
             // // get_feature_jacobian_full()
             {
-                int total_hx = 0;
-                std::unordered_map<Type *, size_t> map_hx;
-
-                PoseJPL *calibration = state->_calib_IMUtoLIDAR.at(current_lidar);
-                // If doing lidar extrinsics
-                if (state->_options.do_calib_lidar_pose)
-                {
-                    map_hx.insert({calibration, total_hx});
-                    x_order.push_back(calibration);
-                    total_hx += calibration->size();
-                }
-                // Add this clone if it is not added already
-                PoseJPL *clone_Ci = state->_clones_IMU.at(feat->timestamp0);
-                if (map_hx.find(clone_Ci) == map_hx.end())
-                {
-                    map_hx.insert({clone_Ci, total_hx});
-                    x_order.push_back(clone_Ci);
-                    total_hx += clone_Ci->size();
-                }
-
-                clone_Ci = state->_clones_IMU.at(feat->timestamp1);
-                if (map_hx.find(clone_Ci) == map_hx.end())
-                {
-                    map_hx.insert({clone_Ci, total_hx});
-                    x_order.push_back(clone_Ci);
-                    total_hx += clone_Ci->size();
-                }
-
-                // Allocate our residual and Jacobians
-                int c = 0;
-                int jacobsize = 3;
-
-                res = Eigen::VectorXd::Zero(1 * 1);
-                H_f = Eigen::MatrixXd::Zero(1 * 1, jacobsize);
-                H_x = Eigen::MatrixXd::Zero(1 * 1, total_hx);
-
-
-
-                Eigen::MatrixXd dpfg_dlambda;
-                std::vector<Eigen::MatrixXd> dpfg_dx, H_x;
-                std::vector<Type *> dpfg_dx_order, x_order;
-                dpfg_dx = H_x;
-                dpfg_dx_order = x_order;
                 // // get_feature_jacobian_representation()
                 {
                     Eigen::Matrix3d skew_b_a, temp0;
                     Eigen::Matrix<double, 1, 3> temp1;
                     Eigen::Vector3d axb;
+
                     skew_b_a.noalias() = skew_x(feat->p_L0_b - feat->p_L0_a);
-                    axb = skew_x(feat->p_L0_a)*feat->p_L0_b;
 
-                    temp0 = skew_b_a.transpose()*skew_b_a;
-                    temp1 = axb.transpose()*skew_b_a;
+                    Eigen::Matrix<double, 3, 1> temp_m = skew_x(feat->p_L0_b - feat->p_L0_a) * feat->p_L1inL0 + skew_x(feat->p_L0_a) *feat->p_L0_b;
 
-                    Eigen::Matrix<double, 1, 3> dr_dpf = 2*feat->p_L1inL0.transpose()*temp0 + 2*temp1;
+                    Eigen::Matrix<double, 3, 3> temp_dm = skew_x(feat->p_L0_b - feat->p_L0_a);
 
-                    Eigen::Matrix3d dpf_dr0 = R_ItoL * skew_x(R_last * (R_curr.transpose() * R_ItoL * feat->p_L1 + p_curr - p_last + R_curr.transpose() * p_LinI));
+                    Eigen::Matrix<double, 1, 3> dr_dpf = 2*temp_m.transpose()*temp_dm;
+
+                    Eigen::Matrix3d dpf_dr0 = R_ItoL * skew_x(R_last * (R_curr.transpose() * R_ItoL * feat->p_L1)) + R_ItoL * skew_x(R_last * (p_curr - p_last + R_curr.transpose() * p_LinI));
 
                     Eigen::Matrix3d dpf_dp0 = -R_ItoL * R_last;
 
@@ -527,62 +544,72 @@ void callback_laser(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg, std::
 
 
                     // Jacobian for our anchor pose
-                    Eigen::Matrix<double, 3, 6> H_anc0;
-                    H_anc0.block(0, 0, 3, 3).noalias() = dr_dpf*dpf_dp0;
-                    H_anc0.block(0, 3, 3, 3).noalias() = dr_dpf*dpf_dr0;
-
-                    // Add anchor Jacobians to our return vector
-                    x_order.push_back(state->_clones_IMU.at(feat->timestamp0));
-                    H_x.push_back(H_anc0);
+                    Eigen::Matrix<double, 1, 6> H_anc0;
+                    H_anc0.block(0, 0, 1, 3).noalias() = dr_dpf*dpf_dr0;
+                    H_anc0.block(0, 3, 1, 3).noalias() = dr_dpf*dpf_dp0;
+                    H_x.block(0, Hx_mapping[clone_I0], 1, clone_I0->size()).noalias() += H_anc0;
 
                     // Jacobian for our anchor pose
-                    Eigen::Matrix<double, 3, 6> H_anc1;
-                    H_anc1.block(0, 0, 3, 3).noalias() = dr_dpf*dpf_dp1;
-                    H_anc1.block(0, 3, 3, 3).noalias() = dr_dpf*dpf_dr1;
-
-                    // Add anchor Jacobians to our return vector
-                    x_order.push_back(state->_clones_IMU.at(feat->timestamp1));
-                    H_x.push_back(H_anc1);
+                    Eigen::Matrix<double, 1, 6> H_anc1;
+                    H_anc1.block(0, 0, 1, 3).noalias() = dr_dpf*dpf_dr1;
+                    H_anc1.block(0, 3, 1, 3).noalias() = dr_dpf*dpf_dp1;
+                    H_x.block(0, Hx_mapping[clone_I1], 1, clone_I1->size()).noalias() += H_anc1;
 
                     // Get calibration Jacobians (for anchor clone)
                     if (state->_options.do_calib_lidar_pose)
                     {
-                        Eigen::Matrix<double, 3, 6> H_calib;
-                        H_calib.block(0, 0, 3, 3).noalias() = dr_dpf*dpf_dpil;
-                        H_calib.block(0, 3, 3, 3).noalias() = dr_dpf*dpf_dril;
-                        x_order.push_back(state->_calib_IMUtoLIDAR.at(feat->timestamp0));
-                        H_x.push_back(H_calib);
-                    }
-                }
-                dpfg_dx = H_x;
-                dpfg_dx_order = x_order;
+                        Eigen::Matrix<double, 1, 6> H_calib;
+                        H_calib.block(0, 0, 1, 3).noalias() = dr_dpf*dpf_dril;
+                        H_calib.block(0, 3, 1, 3).noalias() = dr_dpf*dpf_dpil;
 
-                // Assert that all the ones in our order are already in our local jacobian mapping
-                for (auto &type : dpfg_dx_order)
-                {
-                    assert(map_hx.find(type) != map_hx.end());
+                        H_x.block(0, Hx_mapping[calibration], 1, calibration->size()).noalias() += H_calib;
+
+                        // Hx_order.push_back(state->_calib_IMUtoLIDAR.at(feat->timestamp0));
+                        // H_x.push_back(H_calib);
+                    }
+
+                    Eigen::Matrix<double, 1, 3> Ji = dr_dpf * R_curr_to_last;
+
+                    Eigen::Matrix<double, 3, 1> mm = skew_x(feat->p_L1inL0)*(feat->p_L0_a - feat->p_L0_b) + skew_x(feat->p_L0_a)*feat->p_L0_b;
+
+                    Eigen::Matrix<double, 3, 1> nn = feat->p_L0_a - feat->p_L0_b;
+
+                    Eigen::Matrix<double, 3, 3> dm_da = skew_x(feat->p_L1inL0 - feat->p_L0_b);
+                    Eigen::Matrix<double, 3, 3> dm_db = skew_x(feat->p_L0_a - feat->p_L1inL0);
+                    Eigen::Matrix<double, 3, 3> dn_da = Eigen::Matrix3d::Identity();
+                    Eigen::Matrix<double, 3, 3> dn_db = -Eigen::Matrix3d::Identity();
+
+                    double denominator = nn.transpose()*nn;
+
+                    Eigen::Matrix<double, 1, 3> Jj = (2*mm.transpose()*dm_da*denominator - 2*mm.transpose()*mm*nn.transpose()*dn_da)/(denominator*denominator);
+                    Eigen::Matrix<double, 1, 3> Jk = (2*mm.transpose()*dm_db*denominator - 2*mm.transpose()*mm*nn.transpose()*dn_db)/(denominator*denominator);
+
+                    R_x = params.sigma_pix_lidar * Ji * Ji.transpose() + params.sigma_pix_lidar * Jj * Jj.transpose() + params.sigma_pix_lidar * Jk * Jk.transpose();
+                    // cout << " Ji:" << Ji * Ji.transpose() << endl;
+                    // cout << " Jj:" << Jj * Jj.transpose() << endl;
+                    // cout << " Jk:" << Jk * Jk.transpose() << endl;
+                    // cout << "R_x:"<< params.sigma_pix_lidar * Ji * Ji.transpose() + params.sigma_pix_lidar * Jj * Jj.transpose() + params.sigma_pix_lidar * Jk * Jk.transpose()<<endl;
                 }
+
+                res(0) = feat->res_estimation;
                 
             }
-            
 
-            
-            Hx_order = x_order;
-            // // nullspace_place()
+            // // // nullspace_place()  // --no need
 
-            /// Chi2 distance check
-            Eigen::MatrixXd P_marg = StateHelper::get_marginal_covariance(state, Hx_order);
+            /// Chi2 distance check -- skip
+            Eigen::MatrixXd P_marg = StateHelper::get_marginal_covariance(state, Hx_order_big);
             Eigen::MatrixXd S = H_x * P_marg * H_x.transpose();
             // S.diagonal() += _options.sigma_pix_sq * Eigen::VectorXd::Ones(S.rows());
 
-            S.diagonal() += 0 * Eigen::VectorXd::Ones(S.rows());
+            S.diagonal() += R_x(0) * Eigen::VectorXd::Ones(S.rows());
             double chi2 = res.dot(S.llt().solve(res));
 
             // Get our threshold (we precompute up to 500 but handle the case that it is more)
             double chi2_check;
             if (res.rows() < 500)
             {
-                // chi2_check = chi_squared_table[res.rows()];
+                chi2_check = chi_squared_table[res.rows()];
             }
             else
             {
@@ -591,74 +618,83 @@ void callback_laser(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg, std::
                 printf(YELLOW "chi2_check over the residual limit - %d\n" RESET, (int)res.rows());
             }
 
-            // // Check if we should delete or not
-            // if (chi2 > _options.chi2_multipler * chi2_check)
-            // {
-            //     // (*it2)->to_delete = true;
-            //     it2 = feature_vec.erase(it2);
-            //     //cout << "featid = " << feat.featid << endl;
-            //     //cout << "chi2 = " << chi2 << " > " << _options.chi2_multipler*chi2_check << endl;
-            //     //cout << "res = " << endl << res.transpose() << endl;
-            //     continue;
-            // }
-
-    //         // We are good!!! Append to our large H vector
-    //         size_t ct_hx = 0;
-    //         for (const auto &var : Hx_order)
-    //         {
-
-    //             // Ensure that this variable is in our Jacobian
-    //             if (Hx_mapping.find(var) == Hx_mapping.end())
-    //             {
-    //                 Hx_mapping.insert({var, ct_jacob});
-    //                 Hx_order_big.push_back(var);
-    //                 ct_jacob += var->size();
-    //             }
-
-    //             // Append to our large Jacobian
-    //             Hx_big.block(ct_meas, Hx_mapping[var], H_x.rows(), var->size()) = H_x.block(0, ct_hx, H_x.rows(), var->size());
-    //             ct_hx += var->size();
-    //         }
-    //         // Append our residual and move forward
-    //         res_big.block(ct_meas, 0, res.rows(), 1) = res;
-    //         ct_meas += res.rows();
-    //         it2++;
-
-    //         // Return if we don't have anything and resize our matrices
-    //         if (ct_meas < 1)
-    //         {
-    //             return;
-    //         }
-    //         assert(ct_meas <= max_meas_size);
-    //         assert(ct_jacob <= max_hx_size);
-    //         res_big.conservativeResize(ct_meas, 1);
-    //         Hx_big.conservativeResize(ct_meas, ct_jacob);
-
-    //         // 5. Perform measurement compression
-    //         UpdaterHelper::measurement_compress_inplace(Hx_big, res_big);
-    //         if (Hx_big.rows() < 1)
-    //         {
-    //             return;
-    //         }
-    //         rT4 = boost::posix_time::microsec_clock::local_time();
-
-    //         // Our noise is isotropic, so make it here after our compression
-    //         // Eigen::MatrixXd R_big = _options.sigma_pix_sq * Eigen::MatrixXd::Identity(res_big.rows(), res_big.rows());
-    //         Eigen::MatrixXd R_big = 0 * Eigen::MatrixXd::Identity(res_big.rows(), res_big.rows());
-
-    //         // 6. With all good features update the state
-    //         StateHelper::EKFUpdate(state, Hx_order_big, Hx_big, res_big, R_big);
-    //         rT5 = boost::posix_time::microsec_clock::local_time();
+            // Check if we should delete or not
+            if (chi2 > 1 * chi2_check)
+            {
+                // (*it2)->to_delete = true;
+                feat = feature_vec.erase(feat);
+                //cout << "featid = " << feat.featid << endl;
+                //cout << "chi2 = " << chi2 << " > " << _options.chi2_multipler*chi2_check << endl;
+                //cout << "res = " << endl << res.transpose() << endl;
+                continue;
+            }
 
 
+
+            // We are good!!! Append to our large H vector
+            size_t ct_hx = 0;
+            for (const auto &var : Hx_order_big)
+            {
+
+                // // Ensure that this variable is in our Jacobian
+                // if (Hx_mapping.find(var) == Hx_mapping.end())
+                // {
+                //     Hx_mapping.insert({var, ct_jacob});
+                //     Hx_order_big.push_back(var);
+                //     ct_jacob += var->size();
+                // }
+
+                // Append to our large Jacobian
+                Hx_big.block(ct_meas, Hx_mapping[var], H_x.rows(), var->size()) = H_x.block(0, ct_hx, H_x.rows(), var->size());
+                ct_hx += var->size();
+            }
+            // Append our residual and move forward
+            res_big.block(ct_meas, 0, res.rows(), 1) = res;
+            R_big.block(ct_meas, ct_meas, R_x.rows(), 1) = R_x;
+
+            ct_meas += res.rows();
+
+            feat++;
         }
+
+        // Return if we don't have anything and resize our matrices
+        if (ct_meas < 1)
+        {
+            return;
+        }
+        assert(ct_meas <= max_meas_size);
+        assert(ct_jacob <= max_hx_size);
+        // cout << "H_x  res:" << (Hx_big.rows()) << " " << (Hx_big.cols()) << " " << (res_big.rows()) << endl;
+        // cout<<"ct_meas: "<<ct_meas<<" "<<ct_jacob<<endl;
+        res_big.conservativeResize(ct_meas, 1);
+        Hx_big.conservativeResize(ct_meas, ct_jacob);
+        R_big.conservativeResize(ct_meas, ct_meas);
+
+        // cout<<"after chi2: "<< ct_meas<<endl;
+        // 5. Perform measurement compression
+        // UpdaterHelper::measurement_compress_inplace(Hx_big, res_big);
+        // cout << "H_x.rows() <= H_x.cols(): " << (Hx_big.rows()) << " " << (Hx_big.cols())<<" " << (res_big.rows()) << endl;
+        if (Hx_big.rows() < 1)
+        {
+            return;
+        }
+        rT4 = boost::posix_time::microsec_clock::local_time();
+
+        // cout<<R_big<<endl;
+        // // Our noise is isotropic, so make it here after our compression
+        // // Eigen::MatrixXd R_big = _options.sigma_pix_sq * Eigen::MatrixXd::Identity(res_big.rows(), res_big.rows());
+        // R_big = params.sigma_pix_lidar * Eigen::MatrixXd::Identity(res_big.rows(), res_big.rows());
+
+        //         // 6. With all good features update the state
+                // StateHelper::EKFUpdate(state, Hx_order_big, Hx_big, res_big, R_big);
+                rT5 = boost::posix_time::microsec_clock::local_time();
 
     }
 
-    _q_laser_last.at(current_lidar) = Eigen::Quaterniond(poseCurr.block<3, 3>(0, 0));
-    _t_laser_last.at(current_lidar) = state->_clones_IMU.at(_lidar_time_buffer.at(current_lidar))->pos();
+    _q_laser_last.at(current_lidar) = Eigen::Quaterniond(R_curr);
+    _t_laser_last.at(current_lidar) = state->_clones_IMU_lidar.at(_lidar_time_buffer.at(current_lidar))->pos();
 
-    StateHelper::marginalize_old_clone(state);
+    StateHelper::marginalize_old_clone_lidar(state);
 
     printf("sharp corner: %d, edge feature: %d\n", cornerPointsSharp.size(), edge_list.size());
     _lidar_time_buffer_last.at(current_lidar) = _lidar_time_buffer.at(current_lidar);

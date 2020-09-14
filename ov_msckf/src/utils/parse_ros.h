@@ -252,6 +252,7 @@ namespace ov_msckf {
         nh.param<bool>("calib_lidar_extrinsics", params.state_options.do_calib_lidar_pose, params.state_options.do_calib_lidar_pose);
         nh.param<bool>("calib_lidar_timeoffset", params.state_options.do_calib_lidar_timeoffset, params.state_options.do_calib_lidar_timeoffset);
 
+        nh.param<double>("up_msckf_sigma_lidar", params.sigma_pix_lidar, params.sigma_pix_lidar);
         for (int i = 0; i < params.state_options.num_lidars; i++)
         {
             // Our camera extrinsics transform

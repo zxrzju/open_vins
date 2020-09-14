@@ -1,4 +1,12 @@
 /*
+ * @Author: your name
+ * @Date: 2020-09-06 00:24:31
+ * @LastEditTime: 2020-09-11 14:22:00
+ * @LastEditors: Please set LastEditors
+ * @Description: In User Settings Edit
+ * @FilePath: /open_vins/ov_msckf/src/update/UpdaterOptions.h
+ */
+/*
  * OpenVINS: An Open Platform for Visual-Inertial Research
  * Copyright (C) 2019 Patrick Geneva
  * Copyright (C) 2019 Kevin Eckenhoff
