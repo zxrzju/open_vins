@@ -716,7 +716,17 @@ void VioManager::do_feature_propagate_update(double timestamp) {
         }
     }
 
-
+    // Debug for camera extrinsics
+    if (state->_options.do_calib_lidar_pose)
+    {
+        for (int i = 0; i < state->_options.num_lidars; i++)
+        {
+            PoseJPL *calib = state->_calib_IMUtoLIDAR.at(i);
+            printf("lidar%d extrinsics = %.3f,%.3f,%.3f,%.3f | %.3f,%.3f,%.3f\n", (int)i,
+                   calib->quat()(0), calib->quat()(1), calib->quat()(2), calib->quat()(3),
+                   calib->pos()(0), calib->pos()(1), calib->pos()(2));
+        }
+    }
 }
 
 

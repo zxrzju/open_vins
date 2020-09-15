@@ -53,11 +53,11 @@
         <param name="max_loam_in_update"     type="int"    value="999"/> <!-- 25 seems to work well -->
         <param name="scans"     type="int"    value="16" /> <!-- 25 seems to work well -->
         
-        <param name="calib_lidar_extrinsics"   type="bool"   value="false" />
+        <param name="calib_lidar_extrinsics"   type="bool"   value="true" />
         <param name="calib_lidar_timeoffset"   type="bool"   value="false" />
         <param name="topic_lidar0"  type="string" value="/ns1/velodyne_points" />
         <param name="topic_lidar1"  type="string" value="/ns2/velodyne_points" />
-        <param name="up_msckf_sigma_lidar"            type="double"   value="0.001" /> <!-- 0.005 -->
+        <param name="up_msckf_sigma_lidar"            type="double"   value="0.00051" /> <!-- 0.005 -->
 
 
         <!-- zero velocity update parameters -->
