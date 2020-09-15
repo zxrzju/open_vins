@@ -583,6 +583,8 @@ void UpdaterHelper::get_feature_jacobian_full(State* state, UpdaterHelperFeature
 
 
 void UpdaterHelper::nullspace_project_inplace(Eigen::MatrixXd &H_f, Eigen::MatrixXd &H_x, Eigen::VectorXd &res) {
+    // cout << "H_x: " << (H_x.rows()) << " " << (H_x.cols()) << endl;
+    // cout << "res: " << (res.rows()) << " " << (res.cols()) << endl;
 
     // Apply the left nullspace of H_f to all variables
     // Based on "Matrix Computations 4th Edition by Golub and Van Loan"
@@ -617,7 +619,8 @@ void UpdaterHelper::nullspace_project_inplace(Eigen::MatrixXd &H_f, Eigen::Matri
 
 void UpdaterHelper::measurement_compress_inplace(Eigen::MatrixXd &H_x, Eigen::VectorXd &res) {
 
-
+    // cout << "H_x: " << (H_x.rows()) << " " << (H_x.cols()) << endl;
+    // cout << "res: " << (res.rows()) << " " << (res.cols()) << endl;
     // Return if H_x is a fat matrix (there is no need to compress in this case)
     if(H_x.rows() <= H_x.cols())
         return;
@@ -650,5 +653,40 @@ void UpdaterHelper::measurement_compress_inplace(Eigen::MatrixXd &H_x, Eigen::Ve
 
 }
 
+void UpdaterHelper::measurement_compress_inplace(Eigen::MatrixXd &H_x, Eigen::VectorXd &res, Eigen::MatrixXd &R_x)
+{
 
+    // Return if H1_x is a fat matrix (there is no need to compress in this case)
+    if (H_x.rows() <= H_x.cols())
+        return;
 
+    // Do measurement compression through givens rotations
+    // Based on "Matrix Computations 4th Edition by Golub and Van Loan"
+    // See page 252, Algorithm 5.2.4 for how these two loops work
+    // They use "matlab" index notation, thus we need to subtract 1 from all index
+    Eigen::JacobiRotation<double> tempHo_GR;
+    for (int n = 0; n < H_x.cols(); n++)
+    {
+        for (int m = (int)H_x.rows() - 1; m > n; m--)
+        {
+            // Givens matrix G
+            tempHo_GR.makeGivens(H_x(m - 1, n), H_x(m, n));
+            // Multiply G to the corresponding lines (m-1,m) in each matrix
+            // Note: we only apply G to the nonzero cols [n:Ho.cols()-n-1], while
+            //       it is equivalent to applying G to the entire cols [0:Ho.cols()-1].
+            (H_x.block(m - 1, n, 2, H_x.cols() - n)).applyOnTheLeft(0, 1, tempHo_GR.adjoint());
+            (res.block(m - 1, 0, 2, 1)).applyOnTheLeft(0, 1, tempHo_GR.adjoint());
+            (R_x.block(m - 1, n, 2, R_x.cols() - n)).applyOnTheLeft(0, 1, tempHo_GR.adjoint());
+        }
+    }
+
+    // If H is a fat matrix, then use the rows
+    // Else it should be same size as our state
+    int r = std::min(H_x.rows(), H_x.cols());
+
+    // Construct the smaller jacobian and residual after measurement compression
+    assert(r <= H_x.rows());
+    H_x.conservativeResize(r, H_x.cols());
+    res.conservativeResize(r, res.cols());
+    R_x.conservativeResize(r, R_x.cols());
+}

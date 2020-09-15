@@ -154,8 +154,7 @@ namespace ov_msckf {
          */
         static void measurement_compress_inplace(Eigen::MatrixXd &H_x, Eigen::VectorXd &res);
 
-
-
+        static void measurement_compress_inplace(Eigen::MatrixXd &H_x, Eigen::VectorXd &res, Eigen::MatrixXd &R_x);
     };
 
 

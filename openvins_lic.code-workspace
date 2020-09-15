@@ -9,6 +9,9 @@
 			"/home/csc105/aloam_ws/devel/lib/python2.7/dist-packages",
 			"/opt/ros/kinetic/lib/python2.7/dist-packages"
 		],
-		"python.dataScience.jupyterServerURI": "local"
+		"python.dataScience.jupyterServerURI": "local",
+		"files.associations": {
+			"array": "cpp"
+		}
 	}
 }

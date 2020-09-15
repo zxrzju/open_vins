@@ -210,6 +210,7 @@ void UpdaterMSCKF::update(State *state, std::vector<Feature*>& feature_vec) {
         // We are good!!! Append to our large H vector
         size_t ct_hx = 0;
         for(const auto &var : Hx_order) {
+            // cout << var->id() << " ";
 
             // Ensure that this variable is in our Jacobian
             if(Hx_mapping.find(var)==Hx_mapping.end()) {
@@ -223,7 +224,7 @@ void UpdaterMSCKF::update(State *state, std::vector<Feature*>& feature_vec) {
             ct_hx += var->size();
 
         }
-
+        // cout<<endl;
         // Append our residual and move forward
         res_big.block(ct_meas,0,res.rows(),1) = res;
         ct_meas += res.rows();
@@ -246,16 +247,28 @@ void UpdaterMSCKF::update(State *state, std::vector<Feature*>& feature_vec) {
     assert(ct_jacob<=max_hx_size);
     res_big.conservativeResize(ct_meas,1);
     Hx_big.conservativeResize(ct_meas,ct_jacob);
+    // cout << "R_big:" << res_big.cols() << " " << res_big.rows() << endl;
 
+    // cout << "before H_x.rows() <= H_x.cols(): " << (Hx_big.rows()) << " " << (Hx_big.cols()) << " " << (res_big.rows()) << " " << (res_big.cols()) << endl;
+    // Eigen::MatrixXd R_big1 = _options.sigma_pix_sq * Eigen::MatrixXd::Identity(res_big.rows(), res_big.rows());
+    // cout << "R_big1_before: " << (R_big1.rows()) << " " << (R_big1.cols()) << endl;
 
     // 5. Perform measurement compression
-    UpdaterHelper::measurement_compress_inplace(Hx_big, res_big);
+    UpdaterHelper::measurement_compress_inplace(Hx_big, res_big);//, R_big1);
+    // cout<<R_big1 <<endl;
+    // cout<<"R_big1: "<<(R_big1.rows())<<" "<<(R_big1.cols())<<endl;
+    // if(R_big1.rows()<30){
+    //     cout<<R_big1<<endl;
+    //     cout<<"R*RT:\n"<<R_big1.transpose()*R_big1<<endl;
+    // }
+    // cout<<R_big1*R_big1.transpose()<<endl;
+    // cout << "after H_x.rows() <= H_x.cols(): " << (Hx_big.rows()) << " " << (Hx_big.cols()) << " " << (res_big.rows()) << " " << (res_big.cols()) << endl;
     if(Hx_big.rows() < 1) {
         return;
     }
     rT4 =  boost::posix_time::microsec_clock::local_time();
 
-
+    // R_big = R_big.diagonal();
     // Our noise is isotropic, so make it here after our compression
     Eigen::MatrixXd R_big = _options.sigma_pix_sq*Eigen::MatrixXd::Identity(res_big.rows(),res_big.rows());
     // cout << "H_x.rows() <= H_x.cols(): " << (Hx_big.rows()) << " " << (Hx_big.cols()) << " " << (res_big.rows()) << " " << (res_big.cols()) << endl;
