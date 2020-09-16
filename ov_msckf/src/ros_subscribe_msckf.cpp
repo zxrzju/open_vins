@@ -674,7 +674,7 @@ void callback_laser(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg, std::
         }
         rT4 = boost::posix_time::microsec_clock::local_time();
 
-        // cout<<R_big<<endl;
+
         // // Our noise is isotropic, so make it here after our compression
         // // Eigen::MatrixXd R_big = _options.sigma_pix_sq * Eigen::MatrixXd::Identity(res_big.rows(), res_big.rows());
         // R_big = params.sigma_pix_lidar * Eigen::MatrixXd::Identity(res_big.rows(), res_big.rows());
